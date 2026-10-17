@@ -1,0 +1,21 @@
+# --- Secrets: NEVER upload these ---
+.streamlit/secrets.toml
+.env
+
+# --- Downloaded SEC data (re-downloadable, can be large) ---
+data/cache/
+
+# --- Python's private package folder and auto-generated files ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- Editor / operating-system clutter ---
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# --- Claude Code local settings ---
+.claude/
