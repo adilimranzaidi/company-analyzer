@@ -64,11 +64,13 @@ def company_and_metrics(ticker: str) -> tuple[Company, dict[str, MetricData]] | 
         return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def headlines(agent: str, query: str, timespan: str) -> tuple[list[dict], str]:
-    """(articles, error message). Errors are returned, not raised, so one failed news
-    request never breaks the rest of the page."""
+# Not cached here: NewsClient already saves successful results to disk for an hour, and
+# caching here would also remember failures, hiding headlines after GDELT frees up.
+def headlines(agent: str, query: str, timespan: str) -> tuple[list[dict], str, float | None]:
+    """(articles, error message, hours since saved if not fresh). Errors are returned, not
+    raised, so one failed news request never breaks the rest of the page."""
     try:
-        return news_client(agent).headlines(query, timespan=timespan), ""
+        result = news_client(agent).headlines(query, timespan=timespan)
+        return result.articles, "", result.saved_hours_ago
     except NewsError as err:
-        return [], str(err)
+        return [], str(err), None

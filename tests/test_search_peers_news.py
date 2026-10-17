@@ -124,3 +124,53 @@ def test_parse_articles_dedupes_sorts_and_drops_bad_links():
     articles = parse_articles(payload)
     assert [a["title"] for a in articles] == ["Newer story", "Older story"]
     assert articles[0]["date"] == datetime(2026, 10, 15, 9, 0)
+
+
+# --- Headline retries and saved fallback -------------------------------------
+
+class FakeResponse:
+    def __init__(self, status, payload=None):
+        self.status_code, self._payload = status, payload or {"articles": []}
+        self.ok, self.text = status < 400, ""
+
+    def json(self):
+        return self._payload
+
+
+ONE_ARTICLE = {"articles": [{"title": "AmEx news", "url": "https://n.com/1", "domain": "n.com",
+                             "seendate": "20261015T090000Z"}]}
+
+
+def news_client(tmp_path, responses):
+    from analyzer.news import NewsClient
+    client = NewsClient(cache_dir=tmp_path, sleep=lambda s: None)   # no real waiting
+    replies = iter(responses)
+    client.session.get = lambda *a, **k: next(replies)
+    return client
+
+
+def test_busy_service_is_retried_until_it_answers(tmp_path):
+    client = news_client(tmp_path, [FakeResponse(429), FakeResponse(429),
+                                    FakeResponse(200, ONE_ARTICLE)])
+    result = client.headlines('"American Express"')
+    assert [a["title"] for a in result.articles] == ["AmEx news"]
+    assert result.saved_hours_ago is None
+
+
+def test_saved_headlines_are_shown_when_still_busy(tmp_path):
+    import os, time as _time
+    client = news_client(tmp_path, [FakeResponse(200, ONE_ARTICLE)])
+    client.headlines('"American Express"')                        # saves to cache
+    for f in tmp_path.iterdir():                                  # pretend it's 3 hours old
+        os.utime(f, (_time.time() - 3 * 3600,) * 2)
+    client.session.get = lambda *a, **k: FakeResponse(429)
+    result = client.headlines('"American Express"')
+    assert [a["title"] for a in result.articles] == ["AmEx news"]
+    assert result.saved_hours_ago == pytest.approx(3, abs=0.1)
+
+
+def test_busy_with_nothing_saved_gives_a_clear_message(tmp_path):
+    from analyzer.news import NewsError
+    client = news_client(tmp_path, [FakeResponse(429)] * 3)
+    with pytest.raises(NewsError, match="busy"):
+        client.headlines('"American Express"')

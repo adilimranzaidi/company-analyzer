@@ -245,3 +245,23 @@ is hidden, with a note explaining why, instead of showing old figures as the lat
 Citigroup and Boeing (credit provisions) show the note. Also found that Visa and Berkshire
 Hathaway tag EPS separately for each share class, so no single EPS exists; the app now
 says so instead of a plain "not reported". 3 new tests (84 total).
+
+---
+
+## Headlines: GDELT retries, and why GDELT doesn't fit live headlines (2026-10-17)
+
+**What we did**
+- When GDELT refuses ("one request every 5 seconds"), the app now waits and retries up to
+  3 times, then falls back to the last saved headlines with a note ("saved 3 hours ago").
+- Stopped Streamlit from caching *failures* for an hour (only successful results are
+  saved, by the news module itself). 3 new tests (87 total).
+
+**What we learned (testing live)**
+- GDELT's limit is shared by everyone on the same internet address; on this network it
+  refuses most requests even 7 seconds apart. Sometimes one gets through.
+- Name matching is too loose for company news: "Strategy" (Strategy Inc.) matched an
+  unrelated article about a politician's memoir, and "Coinbase Global" (the legal
+  name) matched nothing, because the press writes "Coinbase". Visa, Target or Apple
+  would have the same problem.
+- **Decision pending:** switch live headlines to a ticker-based source (e.g. Finnhub),
+  and keep GDELT's free bulk data files (no rate limit) for the Version 3 model's history.

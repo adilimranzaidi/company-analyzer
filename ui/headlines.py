@@ -39,11 +39,14 @@ def render(company: Company) -> None:
 
     query = build_query(names)
     with st.spinner("Fetching headlines from GDELT..."):
-        articles, error = data.headlines(data.user_agent(), query, span)
+        articles, error, saved_hours_ago = data.headlines(data.user_agent(), query, span)
+    if saved_hours_ago is not None:
+        ago = (f"{saved_hours_ago:.0f} hours" if saved_hours_ago >= 1.5
+               else f"{saved_hours_ago * 60:.0f} minutes")
+        st.info(f"GDELT is busy for your network, so these are the headlines saved {ago} ago.")
     if error:
         st.warning(error)
         if st.button("Try again"):
-            data.headlines.clear()
             st.rerun()
         return
     if not articles:
