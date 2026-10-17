@@ -159,3 +159,20 @@ def test_metric_that_stopped_long_ago_is_marked_discontinued():
     assert results["operating_income"].discontinued
     assert not results["operating_income"].available
     assert not results["gross_profit"].has_data   # never reported at all
+
+
+def test_original_filing_is_remembered_when_a_number_is_re_reported():
+    # Q1 2025 first appears in the Q1 10-Q, then again a year later as a comparison.
+    rows = YEAR_2025 + [fact("2025-01-01", "2025-03-31", 100, filed="2026-04-30",
+                             accn="0002")]
+    _, quarterly = build_flow_tables(rows, 12, derive_q4=True)
+    q1 = quarterly[quarterly["period"] == "Q1 FY2025"].iloc[0]
+    assert str(q1["filed"]) == "2026-04-30"        # latest filing supplies the value
+    assert str(q1["orig_filed"]) == "2026-01-01"   # original filing is kept for context
+    assert q1["orig_accn"] == "0001"
+
+
+def test_derived_q4_points_to_the_annual_report():
+    _, quarterly = build_flow_tables(YEAR_2025, 12, derive_q4=True)
+    q4 = quarterly[quarterly["period"] == "Q4 FY2025"].iloc[0]
+    assert q4["orig_form"] == "10-K"

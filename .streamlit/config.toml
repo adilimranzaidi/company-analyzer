@@ -1,0 +1,10 @@
+# Streamlit settings for this project (no secrets here; this file is safe to commit).
+
+[server]
+# Only this computer can open the dashboard, not other devices on the network.
+address = "localhost"
+port = 8501
+
+[browser]
+# Don't send anonymous usage statistics to Streamlit.
+gatherUsageStats = false

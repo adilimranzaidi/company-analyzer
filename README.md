@@ -14,14 +14,29 @@ that files with the U.S. Securities and Exchange Commission (SEC).
   and it must cite the filing and section behind each point. If the filings don't answer
   a question, it says so instead of guessing. It never sees or calculates the financials.
 
-## Planned features (Version 1)
+## Roadmap
 
-1. Ticker input (defaults to AXP)
-2. Key financials from SEC EDGAR, with quarterly and annual charts. The exact EDGAR label
-   used for each metric is shown on screen.
-3. Growth rates and margins calculated in Python
-4. Links to the latest 10-K (annual) and 10-Q (quarterly) filings
+**Version 1 (in progress)**
+1. ✅ Ticker input (defaults to AXP)
+2. ✅ Key financials from SEC EDGAR, with quarterly and annual charts. The exact EDGAR
+   label used for each metric is shown on screen.
+3. Growth rates, margins, and return on equity calculated in Python, plus automatic
+   flagging of unusual changes ("notable events")
+4. Links to the latest 10-K (annual), 10-Q (quarterly) and 8-K (current event) filings
 5. A question box answered from the filings themselves, with citations
+   - 5b. "Explain from filing": management's own explanation of each notable event, cited
+   - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,
+     key risks and interview talking points, all cited
+
+**Version 2: macro layer and segments**
+- Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)
+- The company's own disclosed sensitivity to those factors (10-K Item 7A and risk factors)
+- Headlines from feeds and APIs (GDELT, RSS, news APIs), not website scraping
+- Business segment breakdowns pulled from the filings
+
+**Version 3: predictive model**
+- Direction of a company or industry from macro trends and fundamentals, backtested on
+  past data, shown as probabilities with their main drivers (criteria to be defined)
 
 ## Data sources
 

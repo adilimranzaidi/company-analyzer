@@ -106,3 +106,65 @@ A running record of what was built, what broke, and how it was fixed.
 - **Company facts cut off ("00000...")** on narrow screens. Fix: plain text instead of
   Streamlit's big-number boxes.
 - **Plotly labelled billions as "G"** (giga). Fix: we scale the axis ourselves and add "B".
+
+---
+
+## Roadmap decisions (2026-10-17)
+
+- **Notable events** (new): Python flags unusually large changes; Claude explains each one
+  from the matching filing's MD&A, with citations, only when asked (cached after the
+  first time). Detection is in Step 3; explanations are Step 5b, because they reuse the
+  question box's filing reader.
+- **Company synopsis tab** (new, Step 5c): built from the 10-K business section, the latest
+  10-Q, recent 8-Ks and risk factors. Numbers shown come from our code; the AI's text is cited.
+- **Macro layer moved to Version 2.** Headlines come from feeds and APIs (GDELT, RSS, news
+  APIs, Claude web search), **not** scraping. Scraping breaks site terms, hits paywalls, is
+  fragile, and can't provide the dated history a predictive model needs.
+- **Predictive model is Version 3.** It must be backtested (trained on older years, tested
+  on later ones) and shown as probabilities with drivers. Criteria to be set together.
+- **Open-source libraries** (fredapi, gdeltdoc, feedparser) will be used for the new
+  layers after checking each one. We keep our own EDGAR code, because it enforces this
+  project's accuracy rules and is fully tested.
+
+---
+
+## Step 3: Growth, margins, ROE and notable events (2026-10-17)
+
+**What we did**
+- `analyzer/metrics.py` holds every calculation: year-over-year and quarter-over-quarter
+  growth, gross/operating/net margins, and return on equity (annual, plus trailing 12
+  months in the quarterly view). Periods are matched by fiscal label, never by row
+  position, so a missing quarter gives a blank rather than a wrong comparison.
+- Growth from a zero or negative starting point shows "n/m" (not meaningful).
+- Gross profit is **calculated** (revenue − cost of revenue) for companies that report
+  both but not gross profit, and labelled as calculated.
+- **Notable events:** a period is flagged when its year-over-year change is far from the
+  company's own typical change: more than 3 "typical deviations" (median absolute
+  deviation, which isn't distorted by a few extreme years) **and** at least 10 percentage
+  points. A High/Medium/Low sensitivity setting adjusts this.
+- The dashboard now has three tabs: Financials, Growth & margins, Notable events. Flagged
+  periods get an orange diamond (with a legend label) on the Financials charts.
+- Added `.streamlit/config.toml`: the dashboard is reachable only from this computer
+  (it was visible to the local network), and Streamlit's usage statistics are off.
+- 26 new tests (59 total). Checked: AXP FY2024 net margin 15.4% and ROE ~35%; Apple FY2024
+  gross margin 46.2%. All match published figures.
+
+**What broke / how we fixed it**
+- **Stock splits made Apple's EPS look like it fell 86% in 2013.** After Apple's 7-for-1
+  (2014) and 4-for-1 (2020) splits, re-filed periods were restated but older ones weren't,
+  so the history mixed two share bases. Fix: detect splits from the data itself (the same
+  period filed twice, differing by an exact split ratio), then restate older per-share
+  figures and label them "Adjusted for 7-for-1 stock split". Apple's FY2012 EPS now reads
+  $1.58, its published split-adjusted figure.
+- **A false "3-for-2 split" in 2009.** Apple restated 2009 for an accounting change, and
+  one figure happened to land on a 1.5 ratio. Fix: require at least 3 periods to agree
+  (Apple's real splits have 8-11 each).
+- **Events pointed to the wrong filing for explanations.** We keep the latest filing of
+  each number, which is often next year's comparison column. Fix: also track the filing
+  that *first* reported each number. Step 5b will read that one, because that's where
+  management explained it at the time.
+- **Two test mistakes (not app bugs):** a missing growth value is NaN rather than None, and
+  one test spike was smaller than the 10-point minimum on purpose. Fixed the tests.
+- **My browser pane can't reach the dashboard** now that it's local-only. Checked the app
+  with Streamlit's built-in test runner instead (AXP, AAPL, JPM; quarterly and annual; no
+  errors). The visual check of the charts is left to the person running it.
