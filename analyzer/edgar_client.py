@@ -17,6 +17,7 @@ import requests
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
+COMPANY_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 COMPANY_PAGE_URL = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}"
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
@@ -27,6 +28,7 @@ MIN_SECONDS_BETWEEN_REQUESTS = 0.15
 # How long a saved download stays "fresh" before we fetch it again.
 TICKERS_MAX_AGE_HOURS = 24      # the ticker list changes rarely
 SUBMISSIONS_MAX_AGE_HOURS = 6   # new filings can appear any business day
+COMPANY_FACTS_MAX_AGE_HOURS = 6
 
 
 class EdgarError(Exception):
@@ -48,6 +50,7 @@ class Company:
     sic_code: str = ""            # Standard Industrial Classification number
     exchanges: list[str] = field(default_factory=list)
     fiscal_year_end: str = ""     # e.g. "December 31"
+    fiscal_year_end_month: int = 12  # 1-12; used to label fiscal quarters
     filer_category: str = ""      # e.g. "Large accelerated filer"
 
     @property
@@ -194,6 +197,18 @@ class EdgarClient:
         # The SEC lists the exchange once per share class (Berkshire: NYSE, NYSE),
         # so drop repeats while keeping the original order.
         company.exchanges = list(dict.fromkeys(e for e in details.get("exchanges", []) if e))
-        company.fiscal_year_end = format_fiscal_year_end(details.get("fiscalYearEnd", ""))
+        mmdd = details.get("fiscalYearEnd", "") or ""
+        company.fiscal_year_end = format_fiscal_year_end(mmdd)
+        if company.fiscal_year_end:
+            company.fiscal_year_end_month = int(mmdd[:2])
         company.filer_category = details.get("category", "") or ""
         return company
+
+    def company_facts(self, cik: str) -> dict:
+        """Every number the company has tagged in its filings (the SEC's "XBRL" data)."""
+        cik = format_cik(cik)
+        return self._get_json(
+            COMPANY_FACTS_URL.format(cik=cik),
+            f"companyfacts_{cik}.json",
+            COMPANY_FACTS_MAX_AGE_HOURS,
+        )

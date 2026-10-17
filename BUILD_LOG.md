@@ -58,3 +58,51 @@ A running record of what was built, what broke, and how it was fixed.
 **What broke / how we fixed it**
 - **Berkshire showed "NYSE, NYSE".** The SEC lists the exchange once per share class.
   Fix: remove repeats while keeping the order.
+
+---
+
+## Step 2: Key financials and charts (2026-10-17)
+
+**What we did**
+- `analyzer/financials.py` turns the SEC's "company facts" (every XBRL-tagged number)
+  into clean annual and quarterly tables for 10 metrics: revenue, net income, diluted EPS,
+  gross profit, operating income, net interest income, provision for credit losses, total
+  assets, shareholders' equity, and cash.
+- `analyzer/charts.py` draws one bar chart per metric. Derived Q4 bars are a lighter blue
+  with their own legend entry, and hovering shows the source filing.
+- The dashboard has a Quarterly/Annual switch, a years-of-history slider, a summary table
+  (latest values and the EDGAR label used), a data table under each chart, and a
+  "Not shown" list explaining every missing metric.
+- Added 18 tests for the data-cleaning rules (33 total).
+- Checked against published results: AXP FY2024 revenue $65.9B, net income $10.1B, diluted
+  EPS $14.01; Apple FY2024 revenue $391.0B, net income $93.7B. All match.
+
+**The data-cleaning rules (and why)**
+1. **Label choice: most recent data wins.** AmEx has a "Revenues" label whose data stops
+   in 2010, and a current `RevenuesNetOfInterestExpense`. "First label that exists" would
+   have charted 2010 data. Ties go to the preferred label, because AmEx's current
+   `RevenueFromContractWithCustomer...` covers only part of its revenue (mostly card fees).
+2. **Only true quarters.** A Q2 10-Q also reports the 6-month total. We keep periods of
+   80-100 days as quarters and 350-380 days as years.
+3. **Latest filing wins.** The same quarter appears in several filings; the newest one
+   carries any revisions.
+4. **Q4 is derived** as Full year − Q1 − Q2 − Q3, labelled "Derived" everywhere it appears.
+   It's skipped if any quarter is missing, or if the company reported Q4 directly.
+5. **No Q4 EPS.** EPS can't be subtracted, because the share count changes during the year.
+6. **Fiscal labels** come from the company's fiscal year end (Apple's Q1 FY2026 ends in
+   December 2025).
+
+**What broke / how we fixed it**
+- **AmEx "operating income" showed data from 2007-2010** as if it were current. Fix: a
+  metric whose latest data is more than ~400 days behind the company's newest data is
+  marked "no longer reported" and kept off the charts.
+- **The credit-loss label changed in 2020** (`ProvisionForLoanLeaseAndOtherLosses` →
+  `ProvisionForLoanLossesExpensed`). The most-recent rule handles it, and the old label
+  is listed under "not used".
+- **AmEx has no plain cash label** after 2023, only cash *including restricted cash*. We
+  use it and show the label so the difference is visible.
+- **"AttributeError" crash after adding a new field:** the running dashboard had the old
+  code in memory. Fix: restart the dashboard after changing files in `analyzer/`.
+- **Company facts cut off ("00000...")** on narrow screens. Fix: plain text instead of
+  Streamlit's big-number boxes.
+- **Plotly labelled billions as "G"** (giga). Fix: we scale the axis ourselves and add "B".
