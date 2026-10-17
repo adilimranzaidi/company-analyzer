@@ -217,3 +217,31 @@ A running record of what was built, what broke, and how it was fixed.
   copy ran on port 8502 for screenshots, then was shut down.
 - **Industry is slow the first time** (MSFT: ~35s, since its industry list is ~15 pages
   and each peer's data downloads once); after that it's cached.
+
+---
+
+## Fix: Mastercard's net income stuck in 2014 (2026-10-17)
+
+**Reported by:** testing the dashboard. Mastercard's latest net income showed as Q1 FY2014.
+
+**Cause 1: non-financial-statement documents were counted.** The SEC's data includes
+numbers tagged in proxy statements (DEF 14A) and 8-K press releases. Since 2022, proxies
+tag five years of net income for executive-pay tables. Mastercard's proxy used
+`NetIncomeLoss`, so that label looked current, but its 10-Ks and 10-Qs switched to
+`ProfitLoss` in 2014, leaving quarterly figures that ended in 2014.
+**Fix:** only figures from periodic reports count (10-K, 10-Q, their amendments, and the
+foreign equivalents 20-F and 40-F). About 12,900 cached rows from other documents are now ignored.
+
+**Cause 2: net income had only one label.** Added `ProfitLoss` as a fallback
+(`NetIncomeLoss` stays preferred when both are current). For Mastercard it matches the
+company's own reported net income exactly ($14.968B for 2025); Caterpillar also uses it.
+
+**Cause 3: staleness was checked per metric, not per table.** A label can stay current in
+10-Ks but stop in 10-Qs (Citigroup's credit provisions: quarterly tags stop after 2022).
+**Fix:** a quarterly or annual table more than ~400 days behind the company's newest data
+is hidden, with a note explaining why, instead of showing old figures as the latest.
+
+**Checked:** scanned 40 large companies across industries. No stale tables remain;
+Citigroup and Boeing (credit provisions) show the note. Also found that Visa and Berkshire
+Hathaway tag EPS separately for each share class, so no single EPS exists; the app now
+says so instead of a plain "not reported". 3 new tests (84 total).

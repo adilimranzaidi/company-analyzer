@@ -46,8 +46,10 @@ METRICS: tuple[Metric, ...] = (
         description="Total revenue. Banks and card issuers report it net of interest expense.",
     ),
     Metric(
-        "net_income", "Net income", ("NetIncomeLoss",), "flow",
-        description="Profit after all expenses and taxes, attributable to the company's owners.",
+        "net_income", "Net income", ("NetIncomeLoss", "ProfitLoss"), "flow",
+        description="Profit after all expenses and taxes. If the label is ProfitLoss, it "
+                    "includes any small share owned by minority (noncontrolling) investors, "
+                    "matching how the company itself reports net income.",
     ),
     Metric(
         "eps_diluted", "Diluted EPS",
@@ -117,6 +119,7 @@ class MetricData:
     annual: pd.DataFrame
     quarterly: pd.DataFrame
     discontinued: bool = False   # data exists but stopped long ago (e.g. AmEx operating income, 2010)
+    note: str = ""               # shown to the user, e.g. why quarterly figures are hidden
 
     @property
     def has_data(self) -> bool:
@@ -138,8 +141,17 @@ COLUMNS = ["period", "fiscal_year", "fiscal_quarter", "start", "end", "value",
 # Step 1: choose a label
 # ---------------------------------------------------------------------------
 
+# Only official periodic reports count. Other documents also carry tagged numbers but
+# aren't the financial statements: proxy statements (DEF 14A) tag five years of net
+# income for executive-pay tables, and 8-K press releases can be preliminary. Letting
+# those in made Mastercard look as if it still used a label it dropped in 2014.
+PERIODIC_FORMS = {"10-K", "10-K/A", "10-Q", "10-Q/A", "10-KT", "10-KT/A", "10-QT",
+                  "20-F", "20-F/A", "40-F", "40-F/A"}
+
+
 def _rows_for(facts: dict, label: str, unit: str) -> list[dict]:
-    return facts.get("facts", {}).get("us-gaap", {}).get(label, {}).get("units", {}).get(unit, [])
+    rows = facts.get("facts", {}).get("us-gaap", {}).get(label, {}).get("units", {}).get(unit, [])
+    return [r for r in rows if r.get("form") in PERIODIC_FORMS]
 
 
 def choose_label(facts: dict, metric: Metric) -> LabelChoice | None:
@@ -417,6 +429,18 @@ def mark_discontinued(results: dict[str, MetricData]) -> None:
         if md.choice:
             gap = (newest - date.fromisoformat(md.choice.latest_end)).days
             md.discontinued = gap > DISCONTINUED_AFTER_DAYS
+        if md.discontinued:
+            continue
+        # A label can stay current in 10-Ks but go stale in 10-Qs (Citigroup's credit
+        # provisions: quarterly tags stop in 2022). Hide a stale table rather than show
+        # years-old figures as if they were the latest.
+        for attr, kind in (("quarterly", "Quarterly"), ("annual", "Annual")):
+            table = getattr(md, attr)
+            if not table.empty and (newest - table["end"].max()).days > DISCONTINUED_AFTER_DAYS:
+                md.note = (f"{kind} figures under `{md.choice.label}` stop at "
+                           f"{table['period'].iloc[-1]} (the company now tags them differently), "
+                           f"so they aren't shown.")
+                setattr(md, attr, _empty())
 
 
 def sum_tables(a: pd.DataFrame, b: pd.DataFrame, quarterly: bool, source: str) -> pd.DataFrame:

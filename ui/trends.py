@@ -63,12 +63,14 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
 def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, key: str):
     df = _recent(md.quarterly if quarterly else md.annual, years)
     if df.empty:
-        st.info(f"{md.metric.name}: no {'quarterly' if quarterly else 'annual'} data reported.")
+        st.info(md.note or f"{md.metric.name}: no {'quarterly' if quarterly else 'annual'} "
+                "data reported.")
         return
     st.plotly_chart(bar_chart(df, md.metric.name, md.metric.unit,
                               unusual=unusual.get(md.metric.key)),
                     config={"displayModeBar": False}, width="stretch", key=key)
-    st.caption(f"{md.metric.description} EDGAR label: `{md.choice.label}`")
+    st.caption(f"{md.metric.description} EDGAR label: `{md.choice.label}`"
+               + (f"  \n{md.note}" if md.note else ""))
     notes = set(df["source"]) - {"Reported"}
     if md.metric.key == "eps_diluted":
         split_notes = [n for n in notes if n.startswith("Adjusted")]
@@ -126,6 +128,10 @@ def _financials(shown, metrics, quarterly, years, unusual, company):
             if md.discontinued:
                 st.markdown(f"- **{md.metric.name}**: no longer reported (last data "
                             f"{md.choice.latest_end}, `{md.choice.label}`).")
+            elif md.metric.key == "eps_diluted":
+                st.markdown(f"- **{md.metric.name}**: not reported as a single figure. "
+                            "Companies with several share classes (like Visa or Berkshire "
+                            "Hathaway) tag EPS separately for each class.")
             else:
                 st.markdown(f"- **{md.metric.name}**: not reported by {company.ticker}.")
         st.caption("Normal: banks and card issuers don't report gross profit or operating "

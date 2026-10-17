@@ -204,3 +204,38 @@ def test_reported_revenue_is_never_replaced_by_the_calculation():
     revenue = load_all_metrics(facts, 12)["revenue"]
     assert revenue.choice.label == "Revenues"
     assert list(revenue.annual["value"]) == [450]
+
+
+def test_proxy_statements_and_press_releases_are_ignored():
+    # Like Mastercard: NetIncomeLoss only appears recently in a proxy (DEF 14A) and an
+    # 8-K; the real statements use ProfitLoss.
+    facts = facts_with({
+        "NetIncomeLoss": [fact("2013-01-01", "2013-12-31", 3, form="10-K"),
+                          fact("2025-01-01", "2025-12-31", 999, form="DEF 14A"),
+                          fact("2025-01-01", "2025-12-31", 888, form="8-K")],
+        "ProfitLoss": YEAR_2025,
+    })
+    ni = load_all_metrics(facts, 12)["net_income"]
+    assert ni.choice.label == "ProfitLoss"
+    assert 999 not in list(ni.annual["value"]) and 888 not in list(ni.annual["value"])
+    assert list(ni.annual["value"]) == [450]
+    assert "Q3 FY2025" in list(ni.quarterly["period"])
+
+
+def test_net_income_label_preferred_over_profit_loss_when_both_current():
+    facts = facts_with({"NetIncomeLoss": YEAR_2025, "ProfitLoss": YEAR_2025})
+    assert load_all_metrics(facts, 12)["net_income"].choice.label == "NetIncomeLoss"
+
+
+def test_stale_quarterly_table_is_hidden_when_annual_is_current():
+    # Like Citigroup's credit provisions: annual figures continue, quarterly tags stopped.
+    old_quarters = [fact("2022-01-01", "2022-03-31", 1), fact("2022-04-01", "2022-06-30", 2)]
+    annual = [fact(f"{y}-01-01", f"{y}-12-31", 10, form="10-K", filed=f"{y + 1}-02-10")
+              for y in (2022, 2023, 2024, 2025)]
+    facts = facts_with({"ProvisionForLoanLossesExpensed": old_quarters + annual,
+                        "NetIncomeLoss": YEAR_2025})
+    md = load_all_metrics(facts, 12)["credit_provision"]
+    assert md.available
+    assert md.quarterly.empty
+    assert "stop at Q2 FY2022" in md.note
+    assert list(md.annual["period"])[-1] == "FY2025"
