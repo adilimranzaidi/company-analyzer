@@ -25,7 +25,8 @@ if "@" not in agent:
 with st.sidebar:
     st.header("Setup check")
     for label, secret in [("SEC contact", "SEC_USER_AGENT"),
-                          ("Anthropic API key", "ANTHROPIC_API_KEY")]:
+                          ("Anthropic API key", "ANTHROPIC_API_KEY"),
+                          ("Finnhub key (headlines)", "FINNHUB_API_KEY")]:
         (st.success if data.get_secret(secret) else st.warning)(
             f"{label}: {'configured' if data.get_secret(secret) else 'missing'}")
 

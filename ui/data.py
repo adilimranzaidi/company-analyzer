@@ -5,7 +5,7 @@ import streamlit as st
 
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
 from analyzer.financials import MetricData, load_all_metrics
-from analyzer.news import NewsClient, NewsError
+from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, suggest_peers
 
 
@@ -28,8 +28,8 @@ def edgar_client(agent: str) -> EdgarClient:
 
 
 @st.cache_resource
-def news_client(agent: str) -> NewsClient:
-    return NewsClient(agent)
+def news_client(api_key: str) -> NewsClient:
+    return NewsClient(api_key)
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
@@ -65,12 +65,18 @@ def company_and_metrics(ticker: str) -> tuple[Company, dict[str, MetricData]] | 
 
 
 # Not cached here: NewsClient already saves successful results to disk for an hour, and
-# caching here would also remember failures, hiding headlines after GDELT frees up.
-def headlines(agent: str, query: str, timespan: str) -> tuple[list[dict], str, float | None]:
-    """(articles, error message, hours since saved if not fresh). Errors are returned, not
-    raised, so one failed news request never breaks the rest of the page."""
+# caching here would also remember failures.
+def headlines(tickers: tuple[str, ...], days: int) -> tuple[list[dict], str, float | None]:
+    """(articles, error message, hours since saved if not fresh) for one or more tickers.
+    Errors are returned, not raised, so a news problem never breaks the rest of the page."""
     try:
-        result = news_client(agent).headlines(query, timespan=timespan)
-        return result.articles, "", result.saved_hours_ago
+        client = news_client(get_secret("FINNHUB_API_KEY"))
+        groups, oldest = [], None
+        for t in tickers:
+            result = client.company_news(t, days=days)
+            groups.append(result.articles)
+            if result.saved_hours_ago is not None:
+                oldest = max(oldest or 0, result.saved_hours_ago)
+        return merge_articles(groups, limit=40), "", oldest
     except NewsError as err:
         return [], str(err), None

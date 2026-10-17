@@ -8,7 +8,7 @@ import pytest
 from analyzer.compare import industry_medians, rank_in_group
 from analyzer.edgar_client import build_search_options, build_ticker_table, \
     pretty_company_name, primary_ticker_by_cik
-from analyzer.news import build_query, news_name, parse_articles
+from analyzer.news import NewsClient, NewsError, merge_articles, parse_articles
 from analyzer.peers import rank_peers, recent_balance_sheet_periods
 
 RAW_TICKERS = {
@@ -92,85 +92,70 @@ def test_rank_in_group():
     assert rank_in_group(None, [0.1]) is None
 
 
-# --- Headlines ---------------------------------------------------------------
+# --- Headlines (Finnhub) ------------------------------------------------------
 
-@pytest.mark.parametrize("raw, expected", [
-    ("AMERICAN EXPRESS CO", "American Express"),
-    ("Apple Inc.", "Apple"),
-    ("JPMORGAN CHASE & CO", "Jpmorgan Chase"),
-    ("BANK OF AMERICA CORP /DE/", "Bank Of America"),
-])
-def test_news_name_drops_legal_suffixes(raw, expected):
-    assert news_name(raw) == expected
-
-
-def test_build_query():
-    assert build_query(["American Express"]) == '"American Express" sourcelang:english'
-    assert build_query(["Visa", "Mastercard", "Visa"]) == \
-        '("Visa" OR "Mastercard") sourcelang:english'
+def item(headline, ts, url="https://n.com/a", source="Reuters"):
+    return {"headline": headline, "datetime": ts, "url": url, "source": source,
+            "summary": "", "related": "AXP"}
 
 
 def test_parse_articles_dedupes_sorts_and_drops_bad_links():
-    payload = {"articles": [
-        {"title": "Older story", "url": "https://a.com/1", "domain": "a.com",
-         "seendate": "20261001T120000Z"},
-        {"title": "Newer story", "url": "https://b.com/2", "domain": "b.com",
-         "seendate": "20261015T090000Z"},
-        {"title": "newer STORY", "url": "https://c.com/3", "domain": "c.com",
-         "seendate": "20261015T100000Z"},                       # duplicate title
-        {"title": "Bad link", "url": "javascript:alert(1)", "domain": "x",
-         "seendate": "20261016T000000Z"},                       # not a web link
-    ]}
-    articles = parse_articles(payload)
+    articles = parse_articles([
+        item("Older story", 1759320000),                       # 2025-10-01
+        item("Newer story", 1760518800),                       # 2025-10-15
+        item("newer STORY", 1760522400, url="https://c.com"),  # duplicate headline
+        item("Bad link", 1760600000, url="javascript:alert(1)"),
+        item("", 1760600000),                                  # no headline
+    ], "AXP")
     assert [a["title"] for a in articles] == ["Newer story", "Older story"]
-    assert articles[0]["date"] == datetime(2026, 10, 15, 9, 0)
+    assert articles[0]["date"] == datetime(2025, 10, 15, 9, 0)
+    assert articles[0]["ticker"] == "AXP"
 
 
-# --- Headline retries and saved fallback -------------------------------------
+def test_merge_articles_combines_tickers_newest_first_without_repeats():
+    a = parse_articles([item("Shared story", 1760518800), item("AXP only", 1759320000)], "AXP")
+    b = parse_articles([item("Shared story", 1760518800), item("COF only", 1760000000)], "COF")
+    assert [x["title"] for x in merge_articles([a, b], 10)] ==         ["Shared story", "COF only", "AXP only"]
+
 
 class FakeResponse:
     def __init__(self, status, payload=None):
-        self.status_code, self._payload = status, payload or {"articles": []}
-        self.ok, self.text = status < 400, ""
+        self.status_code, self._payload = status, payload if payload is not None else []
+        self.ok = status < 400
 
     def json(self):
         return self._payload
 
 
-ONE_ARTICLE = {"articles": [{"title": "AmEx news", "url": "https://n.com/1", "domain": "n.com",
-                             "seendate": "20261015T090000Z"}]}
-
-
-def news_client(tmp_path, responses):
-    from analyzer.news import NewsClient
-    client = NewsClient(cache_dir=tmp_path, sleep=lambda s: None)   # no real waiting
+def client_with(tmp_path, responses):
+    client = NewsClient("test-key", cache_dir=tmp_path)
     replies = iter(responses)
     client.session.get = lambda *a, **k: next(replies)
     return client
 
 
-def test_busy_service_is_retried_until_it_answers(tmp_path):
-    client = news_client(tmp_path, [FakeResponse(429), FakeResponse(429),
-                                    FakeResponse(200, ONE_ARTICLE)])
-    result = client.headlines('"American Express"')
-    assert [a["title"] for a in result.articles] == ["AmEx news"]
-    assert result.saved_hours_ago is None
+def test_missing_key_gives_setup_instructions():
+    with pytest.raises(NewsError, match="FINNHUB_API_KEY"):
+        NewsClient("")
 
 
-def test_saved_headlines_are_shown_when_still_busy(tmp_path):
+def test_key_is_sent_as_a_header_not_in_the_address():
+    client = NewsClient("test-key")
+    assert client.session.headers["X-Finnhub-Token"] == "test-key"
+
+
+def test_rejected_key_gives_a_clear_message(tmp_path):
+    with pytest.raises(NewsError, match="didn't accept the API key"):
+        client_with(tmp_path, [FakeResponse(401)]).company_news("AXP")
+
+
+def test_saved_headlines_are_shown_when_finnhub_is_unavailable(tmp_path):
     import os, time as _time
-    client = news_client(tmp_path, [FakeResponse(200, ONE_ARTICLE)])
-    client.headlines('"American Express"')                        # saves to cache
-    for f in tmp_path.iterdir():                                  # pretend it's 3 hours old
+    client = client_with(tmp_path, [FakeResponse(200, [item("AmEx news", 1760518800)])])
+    client.company_news("AXP", today=date(2026, 10, 17))           # saves to cache
+    for f in tmp_path.iterdir():                                   # pretend it's 3 hours old
         os.utime(f, (_time.time() - 3 * 3600,) * 2)
     client.session.get = lambda *a, **k: FakeResponse(429)
-    result = client.headlines('"American Express"')
+    result = client.company_news("AXP", today=date(2026, 10, 17))
     assert [a["title"] for a in result.articles] == ["AmEx news"]
     assert result.saved_hours_ago == pytest.approx(3, abs=0.1)
-
-
-def test_busy_with_nothing_saved_gives_a_clear_message(tmp_path):
-    from analyzer.news import NewsError
-    client = news_client(tmp_path, [FakeResponse(429)] * 3)
-    with pytest.raises(NewsError, match="busy"):
-        client.headlines('"American Express"')

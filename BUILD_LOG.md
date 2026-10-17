@@ -265,3 +265,24 @@ says so instead of a plain "not reported". 3 new tests (84 total).
   would have the same problem.
 - **Decision pending:** switch live headlines to a ticker-based source (e.g. Finnhub),
   and keep GDELT's free bulk data files (no rate limit) for the Version 3 model's history.
+
+---
+
+## Headlines switched to Finnhub (2026-10-17)
+
+**Why:** GDELT matched news by company name (loose and often wrong) and was refused most of
+the time on this network. Finnhub looks news up by ticker, so "V" means Visa the company.
+
+**What we did**
+- `analyzer/news.py` now uses Finnhub's company-news endpoint. The key goes in
+  `.streamlit/secrets.toml` as `FINNHUB_API_KEY` and is sent as a request header, not in
+  the web address, so it doesn't appear in logs.
+- Industry headlines merge news for up to 5 peer tickers, newest first, without repeats,
+  each tagged with its ticker.
+- Results are saved for an hour; if Finnhub can't be reached, saved headlines are shown
+  with their age. Clear messages for a missing key, a rejected key, or the free-plan limit.
+- Free-plan limits: about 60 requests a minute, about a year of history, personal and
+  non-commercial use. GDELT's bulk data files stay in the plan for the Version 3 model.
+- Tests rewritten for Finnhub (84 total). Checked: no key shows setup steps, and a fake key
+  reaches Finnhub and gets a clear "key not accepted" message. **Not yet checked with a
+  real key.**

@@ -24,7 +24,7 @@ that files with the U.S. Securities and Exchange Commission (SEC).
    flagging of unusual changes ("notable events")
 3b. ✅ Redesign: EB Garamond theme; calm Overview with charts on request; search by
    company name or ticker; Industry section (editable peer group, peer medians, ranking);
-   Compare up to five companies; Headlines from GDELT
+   Compare up to five companies; Headlines from Finnhub
 4. Links to the latest 10-K (annual), 10-Q (quarterly) and 8-K (current event) filings
 5. A question box answered from the filings themselves, with citations
    - 5b. "Explain from filing": management's own explanation of each notable event, cited
@@ -34,7 +34,7 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 **Version 2: macro layer and segments**
 - Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)
 - The company's own disclosed sensitivity to those factors (10-K Item 7A and risk factors)
-- Headlines from feeds and APIs (GDELT, RSS, news APIs), not website scraping
+- Historical news from GDELT's bulk data files (for the Version 3 model), not website scraping
 - Business segment breakdowns pulled from the filings
 
 **Version 3: predictive model**
@@ -54,6 +54,7 @@ pip install -r requirements.txt
 Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in:
 - `SEC_USER_AGENT`: your name and email (the SEC requires this on every request)
 - `ANTHROPIC_API_KEY`: your key from the Anthropic Console
+- `FINNHUB_API_KEY`: a free key from finnhub.io (for headlines)
 
 Then start the dashboard:
 
@@ -78,5 +79,5 @@ BUILD_LOG.md           what was built, what broke, and how it was fixed
 
 - [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces):
   company facts (XBRL), submissions, industry lists, and "frames" (one figure for every company)
-- [The GDELT Project](https://www.gdeltproject.org/): open index of worldwide news, for headlines
+- [Finnhub](https://finnhub.io/): company news by ticker, for headlines (free key)
 - [Anthropic Claude API](https://docs.anthropic.com/): for filing Q&A and synopses (upcoming)
