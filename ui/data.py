@@ -1,9 +1,11 @@
 """Loading data for the dashboard, with Streamlit's caching so each download and
 calculation happens once and is reused while the app runs."""
 
+import pandas as pd
 import streamlit as st
 
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
+from analyzer.filings import filings_table
 from analyzer.financials import MetricData, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, suggest_peers
@@ -45,6 +47,11 @@ def company(agent: str, ticker: str) -> Company:
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
 def metrics(agent: str, cik: str, fye_month: int) -> dict[str, MetricData]:
     return load_all_metrics(edgar_client(agent).company_facts(cik), fye_month)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def filings(agent: str, cik: str) -> pd.DataFrame:
+    return filings_table(edgar_client(agent).submissions(cik), cik)
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)

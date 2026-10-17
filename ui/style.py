@@ -25,6 +25,9 @@ h1 { font-size: 2.3rem !important; }
 .ca-headline div { color: #6b6a64; font-size: 0.9rem; }
 .ca-placeholder { border: 1px dashed #d6d2c4; border-radius: 6px; padding: 1rem 1.2rem;
                   color: #5b5a55; background: #faf9f5; }
+/* Cards for the latest reports */
+.ca-card { background: #f3f1ea; border-radius: 6px; padding: 0.9rem 1.1rem; height: 100%; }
+.ca-card-title { font-size: 1.2rem; margin: 0.15rem 0; }
 /* No link icons next to headings */
 [data-testid="stHeaderActionElements"] { display: none !important; }
 /* App name: one line, quieter than the company name */

@@ -7,6 +7,7 @@ import streamlit as st
 
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value, ratio_chart
 from analyzer.edgar_client import Company
+from analyzer.filings import index_url
 from analyzer.financials import MetricData
 from analyzer.metrics import add_growth, margin_tables, notable_events, roe_annual, roe_trailing
 
@@ -55,12 +56,13 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     elif view == "Growth and margins":
         _growth(shown, metrics, quarterly, years)
     else:
-        _events(events, period, years, sens)
+        _events(events, period, years, sens, company.cik)
 
 
 # -----------------------------------------------------------------------------
 
-def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, key: str):
+def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, key: str,
+                  cik: str):
     df = _recent(md.quarterly if quarterly else md.annual, years)
     if df.empty:
         st.info(md.note or f"{md.metric.name}: no {'quarterly' if quarterly else 'annual'} "
@@ -81,14 +83,17 @@ def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, ke
                        "the share count changes during the year.")
     with st.expander("Data table and sources"):
         t = df[["period", "end", "value", "source", "form", "filed", "orig_form",
-                "orig_filed"]].copy()
+                "orig_filed", "orig_accn"]].copy()
         t["value"] = t["value"].apply(lambda v: format_value(v, md.metric.unit))
         t["latest"] = t["form"] + " filed " + t["filed"].astype(str)
         t["first"] = t["orig_form"] + " filed " + t["orig_filed"].astype(str)
-        t = t[["period", "end", "value", "source", "latest", "first"]]
+        t["link"] = [index_url(cik, a) for a in t["orig_accn"]]
+        t = t[["period", "end", "value", "source", "latest", "first", "link"]]
         t.columns = ["Period", "Period end", "Value", "Source", "Value taken from",
-                     "First reported in"]
-        st.dataframe(t.iloc[::-1], hide_index=True, width="stretch")
+                     "First reported in", "Filing"]
+        st.dataframe(t.iloc[::-1], hide_index=True, width="stretch",
+                     column_config={"Filing": st.column_config.LinkColumn(
+                         "Filing", display_text="Open")})
         if md.choice.passed_over:
             st.markdown("Other EDGAR labels found but not used (less recent data): "
                         + ", ".join(f"`{l}` (to {e})" for l, e in md.choice.passed_over))
@@ -102,13 +107,14 @@ def _financials(shown, metrics, quarterly, years, unusual, company):
 
     if not show_all:
         md = next(m for m in shown if m.metric.name == choice)
-        _metric_chart(md, quarterly, years, unusual, key=f"one_{md.metric.key}")
+        _metric_chart(md, quarterly, years, unusual, key=f"one_{md.metric.key}", cik=company.cik)
     else:
         for i in range(0, len(shown), 2):
             cols = st.columns(2)
             for col, md in zip(cols, shown[i:i + 2]):
                 with col:
-                    _metric_chart(md, quarterly, years, unusual, key=f"all_{md.metric.key}")
+                    _metric_chart(md, quarterly, years, unusual, key=f"all_{md.metric.key}",
+                                  cik=company.cik)
 
     with st.expander("All latest figures, and metrics not shown"):
         rows = []
@@ -189,7 +195,7 @@ def _growth(shown, metrics, quarterly, years):
                 + "</div>", unsafe_allow_html=True)
 
 
-def _events(events, period, years, sens):
+def _events(events, period, years, sens, cik):
     st.markdown(
         '<div class="ca-muted">Changes that were unusual <i>for this company</i>, judged '
         "against its own history. Python does the flagging. In Step 5b, each event gets an "
@@ -209,7 +215,9 @@ def _events(events, period, years, sens):
         "Change": [format_pct(g) for g in ev["yoy_growth"]],
         "Typical change": [format_pct(g) for g in ev["typical_growth"]],
         "First reported in": [f"{f} filed {d}" for f, d in zip(ev["orig_form"], ev["orig_filed"])],
-    }), hide_index=True, width="stretch")
+        "Filing": [index_url(cik, a) for a in ev["orig_accn"]],
+    }), hide_index=True, width="stretch",
+        column_config={"Filing": st.column_config.LinkColumn("Filing", display_text="Open")})
     st.caption("\"Typical change\" is the company's median year-over-year change for that "
                "metric. Several metrics flagged in one period usually share one cause, such "
                "as COVID-19 in 2020-21.")

@@ -8,6 +8,7 @@ import streamlit as st
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value
 from analyzer.compare import trailing_roe_latest
 from analyzer.edgar_client import Company
+from analyzer.filings import index_url
 from analyzer.financials import MetricData
 from analyzer.metrics import add_growth, notable_events
 from ui.style import placeholder
@@ -77,8 +78,10 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         for _, e in events.head(4).iterrows():
             direction = "up" if (e["yoy_growth"] or 0) >= 0 else "down"
             change = format_pct(abs(e["yoy_growth"])).lstrip("+")
+            link = index_url(company.cik, e["orig_accn"])
             rows.append(f'<div class="ca-row"><span>{html.escape(e["metric"])} {direction} '
-                        f'{change} vs. a year earlier</span><span>{e["period"]}</span></div>')
+                        f'{change} vs. a year earlier</span><span>{e["period"]} · '
+                        f'<a href="{link}" target="_blank">{e["orig_form"]}</a></span></div>')
         st.markdown("".join(rows), unsafe_allow_html=True)
 
     c1, c2, _ = st.columns([1, 1, 3])

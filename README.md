@@ -25,7 +25,8 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 3b. ✅ Redesign: EB Garamond theme; calm Overview with charts on request; search by
    company name or ticker; Industry section (editable peer group, peer medians, ranking);
    Compare up to five companies; Headlines from Finnhub
-4. Links to the latest 10-K (annual), 10-Q (quarterly) and 8-K (current event) filings
+4. ✅ Filings list: latest 10-K, 10-Q and 8-K filings with links, and 8-K event types in
+   plain English
 5. A question box answered from the filings themselves, with citations
    - 5b. "Explain from filing": management's own explanation of each notable event, cited
    - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,

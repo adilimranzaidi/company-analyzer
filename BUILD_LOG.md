@@ -286,3 +286,31 @@ the time on this network. Finnhub looks news up by ticker, so "V" means Visa the
 - Tests rewritten for Finnhub (84 total). Checked: no key shows setup steps, and a fake key
   reaches Finnhub and gets a clear "key not accepted" message. **Not yet checked with a
   real key.**
+
+---
+
+## Step 4: Filings list (2026-10-17)
+
+**What we did**
+- `analyzer/filings.py` reads the SEC's list of the company's filings (already downloaded
+  for the company header) and keeps 10-K, 10-Q and 8-K filings plus amendments and
+  foreign equivalents (20-F, 40-F, 6-K), newest first, with links to each document and
+  its index page.
+- 8-K "item" codes are translated into plain English with a fixed lookup of the SEC's
+  official item list ("2.02" → "Quarterly or annual results (earnings release)"). No AI;
+  unknown codes are shown as "Item x.xx" rather than guessed.
+- "Significant" 8-Ks: an analyst-relevant item such as earnings, a major agreement, an
+  executive change, an auditor change or an impairment. Routine ones (investor
+  presentations, 7.01; exhibits only, 9.01) can be hidden with a toggle.
+- The Filings section shows the latest annual and quarterly reports as cards, then a
+  filterable table (type, time range, significant only) with "Open" links.
+- **Clickable sources:** every notable event (Overview and Company trends) and every row
+  in the chart data tables now links to the filing that *first* reported the number.
+- 5 new tests (89 total). Checked AXP, MA, JPM, AAPL; generated links open on sec.gov
+  (HTTP 200).
+
+**Notes**
+- The SEC's "recent" list holds about the last 1,000 filings of all kinds (for AmEx, back
+  to December 2019). Older filings are in extra files we don't load yet.
+- An 8-K's item codes describe the *type* of event, not its details. Reading the
+  documents is Step 5's job.
