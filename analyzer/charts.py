@@ -9,6 +9,12 @@ REPORTED_COLOR = "#2a78d6"
 DERIVED_COLOR = "#86b6ef"
 UNUSUAL_COLOR = "#eb6834"   # orange marker, always paired with a legend label
 GRID_COLOR = "rgba(137, 135, 129, 0.25)"
+FONT = dict(family="EB Garamond, Garamond, Georgia, serif", size=15, color="#1d1d1b")
+
+# Fixed color order for charts with several companies (colorblind-checked palette).
+# Colors follow the company's position in the user's list, and the legend always
+# names each line, so color is never the only way to tell them apart.
+SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
 
 
 def format_pct(value) -> str:
@@ -93,7 +99,8 @@ def bar_chart(df: pd.DataFrame, title: str, unit: str,
         yaxis=dict(gridcolor=GRID_COLOR, zeroline=True, zerolinecolor=GRID_COLOR,
                    tickprefix="$", ticksuffix=suffix,
                    tickformat=".2f" if unit == "USD/shares" else ",.1~f"),
-        hoverlabel=dict(align="left"),
+        hoverlabel=dict(align="left", font=FONT),
+        font=FONT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 
@@ -118,6 +125,49 @@ def ratio_chart(df: pd.DataFrame, title: str, formula: str) -> go.Figure:
                    showgrid=False, tickangle=-45 if len(df) > 8 else 0),
         yaxis=dict(gridcolor=GRID_COLOR, ticksuffix="%", zeroline=True,
                    zerolinecolor=GRID_COLOR),
-        hoverlabel=dict(align="left"),
+        hoverlabel=dict(align="left", font=FONT),
+        font=FONT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig
+
+
+def multi_line_chart(series: dict[str, pd.DataFrame], title: str, percent: bool = True,
+                     dashed: set[str] | None = None) -> go.Figure:
+    """One line per company (or the industry median). Each df has period, value.
+    Names in `dashed` (e.g. "Industry median") get a dashed line as a second cue."""
+    fig = go.Figure()
+    order: list[str] = []
+    for i, (name, df) in enumerate(series.items()):
+        if df.empty:
+            continue
+        for p in df["period"]:
+            if p not in order:
+                order.append(p)
+        values = df["value"] * 100 if percent else df["value"]
+        fig.add_scatter(
+            x=df["period"], y=values, mode="lines+markers", name=name,
+            line=dict(color=SERIES_COLORS[i % len(SERIES_COLORS)], width=2,
+                      dash="dash" if dashed and name in dashed else "solid"),
+            marker=dict(size=8),
+            hovertemplate=f"<b>{name}</b><br>%{{x}}: %{{y:.1f}}{'%' if percent else ''}<extra></extra>",
+        )
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=17)),
+        height=360, margin=dict(l=10, r=10, t=50, b=10),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0),
+        xaxis=dict(categoryorder="array", categoryarray=sorted(order, key=_period_sort_key),
+                   showgrid=False),
+        yaxis=dict(gridcolor=GRID_COLOR, ticksuffix="%" if percent else "", zeroline=True,
+                   zerolinecolor="rgba(137, 135, 129, 0.6)"),
+        font=FONT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        hoverlabel=dict(font=FONT),
+    )
+    return fig
+
+
+def _period_sort_key(period: str):
+    """"Q2 FY2025" -> (2025, 2); "FY2024" -> (2024, 9)."""
+    parts = period.replace("FY", "").split()
+    if len(parts) == 2:
+        return int(parts[1]), int(parts[0].lstrip("Q"))
+    return int(parts[0]), 9

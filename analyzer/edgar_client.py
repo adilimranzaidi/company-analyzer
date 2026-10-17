@@ -9,6 +9,7 @@ Rules the SEC asks every program to follow, and how this file follows them:
 
 import calendar
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,13 @@ MIN_SECONDS_BETWEEN_REQUESTS = 0.15
 TICKERS_MAX_AGE_HOURS = 24      # the ticker list changes rarely
 SUBMISSIONS_MAX_AGE_HOURS = 6   # new filings can appear any business day
 COMPANY_FACTS_MAX_AGE_HOURS = 6
+INDUSTRY_LIST_MAX_AGE_HOURS = 24 * 7   # which companies share an industry code changes slowly
+FRAMES_MAX_AGE_HOURS = 24
+
+# Every company registered under one SEC industry code (an Atom feed the SEC publishes).
+INDUSTRY_LIST_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
+# One figure for every company at once, e.g. everyone's total assets at 2025 year end.
+FRAMES_URL = "https://data.sec.gov/api/xbrl/frames/us-gaap/{concept}/{unit}/{period}.json"
 
 
 class EdgarError(Exception):
@@ -96,6 +104,52 @@ def build_ticker_table(raw: dict) -> dict[str, dict]:
     return table
 
 
+# Words that stay as written when tidying up the SEC's ALL-CAPS company names.
+_NAME_KEEP_UPPER = {"IBM", "AT&T", "USA", "US", "UK", "LLC", "LP", "PLC", "NV", "SA", "AG",
+                    "SE", "ETF", "REIT", "II", "III", "IV", "HP", "AMD", "CSX", "BNY",
+                    "UPS", "NXP", "TJX", "CVS", "AES", "PNC", "MSCI", "KLA", "NRG", "DTE"}
+_NAME_KEEP_LOWER = {"of", "and", "the", "for", "de", "&"}
+
+
+def pretty_company_name(name: str) -> str:
+    """The SEC writes many names in capitals: "AMERICAN EXPRESS CO" -> "American Express Co".
+    Names already in mixed case ("Apple Inc.") are left alone. State tags the SEC adds,
+    like "/DE/" (incorporated in Delaware), are removed."""
+    name = re.sub(r"\s*[/\\][A-Za-z]{2,3}[/\\]?\s*$", "", name or "").strip()
+    if not name or not name.isupper():
+        return name
+    words = []
+    for i, word in enumerate(name.split()):
+        bare = word.strip(".,/")
+        if bare in _NAME_KEEP_UPPER:
+            words.append(word)
+        elif i > 0 and word.lower() in _NAME_KEEP_LOWER:
+            words.append(word.lower())
+        else:
+            words.append(word.capitalize())
+    return " ".join(words)
+
+
+def build_search_options(table: dict[str, dict]) -> list[dict]:
+    """One searchable entry per ticker, e.g. "American Express Co (AXP)".
+    Lets people search by company name or by ticker in the same box."""
+    options = [
+        {"label": f"{pretty_company_name(row['name'])} ({ticker})", "ticker": ticker,
+         "cik": row["cik"]}
+        for ticker, row in table.items()
+    ]
+    return sorted(options, key=lambda o: o["label"].lower())
+
+
+def primary_ticker_by_cik(raw: dict) -> dict[str, str]:
+    """A company can have several tickers (BRK-A, BRK-B). The SEC lists the main one
+    first, so keep the first ticker seen for each company."""
+    result: dict[str, str] = {}
+    for row in raw.values():
+        result.setdefault(format_cik(row["cik_str"]), row["ticker"].upper())
+    return result
+
+
 def find_company(ticker: str, table: dict[str, dict]) -> Company:
     """Look a ticker up in the table, or raise TickerNotFound with a helpful message."""
     clean = normalize_ticker(ticker)
@@ -147,11 +201,14 @@ class EdgarClient:
         return data
 
     def _download_json(self, url: str) -> dict:
+        return self._download(url).json()
+
+    def _download(self, url: str, params: dict | None = None) -> requests.Response:
         wait = MIN_SECONDS_BETWEEN_REQUESTS - (time.time() - self._last_request_time)
         if wait > 0:
             time.sleep(wait)
         try:
-            response = self.session.get(url, timeout=30)
+            response = self.session.get(url, params=params, timeout=30)
         except requests.RequestException as exc:
             raise EdgarError(
                 "Couldn't reach the SEC website. Check your internet connection and try again."
@@ -171,13 +228,51 @@ class EdgarClient:
             raise EdgarError(
                 f"The SEC website returned an error ({response.status_code}). Try again shortly."
             )
-        return response.json()
+        return response
 
     # --- public functions used by the dashboard ---------------------------
 
+    def _raw_tickers(self) -> dict:
+        return self._get_json(TICKERS_URL, "company_tickers.json", TICKERS_MAX_AGE_HOURS)
+
     def ticker_table(self) -> dict[str, dict]:
-        raw = self._get_json(TICKERS_URL, "company_tickers.json", TICKERS_MAX_AGE_HOURS)
-        return build_ticker_table(raw)
+        return build_ticker_table(self._raw_tickers())
+
+    def search_options(self) -> list[dict]:
+        return build_search_options(self.ticker_table())
+
+    def primary_tickers(self) -> dict[str, str]:
+        return primary_ticker_by_cik(self._raw_tickers())
+
+    def companies_in_industry(self, sic_code: str) -> list[str]:
+        """CIKs of every company registered under an SEC industry (SIC) code.
+        The SEC's list comes 100 companies per page, so we read pages until one is short."""
+        cache_file = self.cache_dir / f"industry_{sic_code}.json"
+        if cache_file.exists():
+            age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
+            if age_hours < INDUSTRY_LIST_MAX_AGE_HOURS:
+                return json.loads(cache_file.read_text(encoding="utf-8"))
+        ciks: list[str] = []
+        for start in range(0, 5000, 100):
+            page = self._download(INDUSTRY_LIST_URL, params={
+                "action": "getcompany", "SIC": sic_code, "type": "10-K", "dateb": "",
+                "owner": "include", "count": 100, "start": start, "output": "atom",
+            }).text
+            found = re.findall(r"<cik>(\d+)</cik>", page)
+            ciks.extend(format_cik(c) for c in found)
+            if len(found) < 100:
+                break
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(ciks), encoding="utf-8")
+        return ciks
+
+    def frame(self, concept: str, unit: str, period: str) -> dict:
+        """One figure for every company for one period, e.g. Assets at CY2025Q4I."""
+        return self._get_json(
+            FRAMES_URL.format(concept=concept, unit=unit, period=period),
+            f"frame_{concept}_{unit.replace('/', '-')}_{period}.json",
+            FRAMES_MAX_AGE_HOURS,
+        )
 
     def submissions(self, cik: str) -> dict:
         """The SEC's "submissions" record: company details plus its list of filings."""

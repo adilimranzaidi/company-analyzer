@@ -168,3 +168,52 @@ A running record of what was built, what broke, and how it was fixed.
 - **My browser pane can't reach the dashboard** now that it's local-only. Checked the app
   with Streamlit's built-in test runner instead (AXP, AAPL, JPM; quarterly and annual; no
   errors). The visual check of the charts is left to the person running it.
+
+---
+
+## Step 3b: Redesign, search, industry, compare and headlines (2026-10-17)
+
+**What we did**
+- **Look:** EB Garamond (a free, faithful version of the classic Garamond typeface) on a
+  warm off-white background, set in `.streamlit/config.toml`. Charts use the same font,
+  Plotly's hover toolbar is hidden, and heading link icons are off.
+- **Layout:** one section menu (Overview, Company trends, Industry, Compare, Headlines,
+  Filings and Q&A) instead of everything on one page. Only the chosen section loads.
+  The page code moved into `ui/` (one file per section); `app.py` is only the frame.
+- **Overview:** four key figures with year-over-year change, the latest notable events,
+  and charts only when "Show key charts" is switched on. Synopsis placeholder (Step 5c).
+- **Company trends:** one chart at a time from a dropdown, with "Show all charts".
+- **Search by name or ticker** across all ~10,400 SEC tickers. SEC names are tidied for
+  display ("AMERICAN EXPRESS CO /DE/" → "American Express Co").
+- **Industry:** peers suggested from the SEC industry (SIC) list, kept to listed
+  companies, ranked by total assets using the SEC "frames" data (everyone's figure in one
+  download). The list is editable. Shows a snapshot table, peer medians, where the
+  company ranks, and a company-vs-peer-median trend chart. Drivers placeholder (Step 5 / V2).
+- **Compare:** up to five companies side by side, plus growth and ratio charts (growth
+  rather than dollars, so different-sized companies fit on one chart).
+- **Headlines:** company or peer news from the GDELT API, as links, cached for an hour.
+- 21 new tests (81 total). Every section checked headlessly for AXP, SYF, MSFT, JPM, AAPL;
+  Overview, Industry and Compare also checked visually.
+
+**What broke / how we fixed it**
+- **Synchrony had no revenue.** It never tags a total-revenue figure, only net interest
+  income and noninterest income. Fix: for lenders without a revenue label, calculate
+  revenue as the sum of those two (the standard bank definition, and how AmEx's reported
+  revenue is built), labelled "Calculated". Never replaces a reported figure (tested).
+- **"US Bancorp de":** the SEC sometimes writes state tags with backslashes (`\DE\`).
+  Names now drop both `/DE/` and `\DE\`.
+- **SEC industry codes are broad:** AmEx's code (6199, finance services) suggests crypto
+  firms (Coinbase, Circle, Strategy) alongside Synchrony. Expected; that's why the peer
+  list is editable.
+- **GDELT rate-limits this network** ("one request every 5 seconds") even on the first
+  request; probably a shared internet address. The app paces requests, caches results for
+  an hour, and shows a "try again" message instead of failing. If it stays blocked, the
+  fallbacks are Finnhub or Claude web search.
+- **JPMorgan Q2 2026 revenue +27.7%** looked like a bug but matches JPM's 10-Q ($57.35B vs
+  $44.91B), likely a one-time item, as in Q2 2024 (Visa share gain). Flagged by notable
+  events; Step 5b will explain it from the filing.
+- **Font looked wrong in the first screenshot:** EB Garamond was still downloading.
+- **Visual check:** the browser pane can't reach the local-only dashboard, so a temporary
+  copy ran on port 8502 for screenshots, then was shut down.
+- **Industry is slow the first time** (MSFT: ~35s, since its industry list is ~15 pages
+  and each peer's data downloads once); after that it's cached.

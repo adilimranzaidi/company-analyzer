@@ -8,3 +8,21 @@ port = 8501
 [browser]
 # Don't send anonymous usage statistics to Streamlit.
 gatherUsageStats = false
+
+[client]
+# Hide developer menus (Deploy button etc.) for a cleaner page.
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+# EB Garamond: a free, faithful version of the classic Garamond typeface, from Google Fonts.
+font = "EB Garamond:https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&display=swap"
+headingFont = "EB Garamond:https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&display=swap"
+baseFontSize = 17
+primaryColor = "#1f4e79"            # deep navy for buttons, links and the selected section
+backgroundColor = "#fdfcf9"         # warm off-white "paper"
+secondaryBackgroundColor = "#f3f1ea" # cards and inputs
+textColor = "#1d1d1b"
+borderColor = "#e3e0d6"
+baseRadius = "small"
+showWidgetBorder = true

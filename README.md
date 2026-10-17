@@ -20,8 +20,11 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 1. ✅ Ticker input (defaults to AXP)
 2. ✅ Key financials from SEC EDGAR, with quarterly and annual charts. The exact EDGAR
    label used for each metric is shown on screen.
-3. Growth rates, margins, and return on equity calculated in Python, plus automatic
+3. ✅ Growth rates, margins, and return on equity calculated in Python, plus automatic
    flagging of unusual changes ("notable events")
+3b. ✅ Redesign: EB Garamond theme; calm Overview with charts on request; search by
+   company name or ticker; Industry section (editable peer group, peer medians, ranking);
+   Compare up to five companies; Headlines from GDELT
 4. Links to the latest 10-K (annual), 10-Q (quarterly) and 8-K (current event) filings
 5. A question box answered from the filings themselves, with citations
    - 5b. "Explain from filing": management's own explanation of each notable event, cited
@@ -37,12 +40,6 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 **Version 3: predictive model**
 - Direction of a company or industry from macro trends and fundamentals, backtested on
   past data, shown as probabilities with their main drivers (criteria to be defined)
-
-## Data sources
-
-- [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
-  (free, public)
-- [Anthropic Claude API](https://docs.anthropic.com/) for the question box
 
 ## Running it yourself
 
@@ -67,9 +64,19 @@ streamlit run app.py
 ## Project layout
 
 ```
-app.py                 the dashboard page (layout only)
-analyzer/              data fetching, cleaning, math, and AI Q&A (added step by step)
-tests/                 automated checks for the calculations
-.streamlit/            settings and private secrets (secrets are never uploaded)
+app.py                 the page frame: search, company header, section menu
+ui/                    one file per section (Overview, Company trends, Industry,
+                       Compare, Headlines, Filings and Q&A); layout only
+analyzer/              all data and math: SEC client, data cleaning, metrics,
+                       peers, comparisons, headlines
+tests/                 automated checks for every calculation and cleaning rule
+.streamlit/            theme (EB Garamond) and settings; private secrets (never uploaded)
 BUILD_LOG.md           what was built, what broke, and how it was fixed
 ```
+
+## Data sources
+
+- [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces):
+  company facts (XBRL), submissions, industry lists, and "frames" (one figure for every company)
+- [The GDELT Project](https://www.gdeltproject.org/): open index of worldwide news, for headlines
+- [Anthropic Claude API](https://docs.anthropic.com/): for filing Q&A and synopses (upcoming)

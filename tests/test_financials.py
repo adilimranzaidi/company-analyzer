@@ -176,3 +176,31 @@ def test_derived_q4_points_to_the_annual_report():
     _, quarterly = build_flow_tables(YEAR_2025, 12, derive_q4=True)
     q4 = quarterly[quarterly["period"] == "Q4 FY2025"].iloc[0]
     assert q4["orig_form"] == "10-K"
+
+
+def test_lender_revenue_is_calculated_when_not_reported():
+    # Like Synchrony: no revenue label, but net interest income and noninterest income.
+    def year(nii_scale):
+        return [fact("2025-01-01", "2025-03-31", 10 * nii_scale),
+                fact("2025-04-01", "2025-06-30", 11 * nii_scale),
+                fact("2025-07-01", "2025-09-30", 12 * nii_scale),
+                fact("2025-01-01", "2025-12-31", 46 * nii_scale, form="10-K",
+                     filed="2026-02-10")]
+    facts = facts_with({"InterestIncomeExpenseNet": year(1),
+                        "NoninterestIncome": year(0.5),
+                        "NetIncomeLoss": YEAR_2025})
+    revenue = load_all_metrics(facts, 12)["revenue"]
+    assert revenue.available
+    assert list(revenue.annual["value"]) == [46 + 23]               # 46 + 46 * 0.5
+    q4 = revenue.quarterly[revenue.quarterly["period"] == "Q4 FY2025"].iloc[0]
+    assert q4["value"] == pytest.approx((46 - 33) + (23 - 16.5))     # derived Q4s added
+    assert "Calculated" in revenue.annual["source"].iloc[0]
+    assert revenue.choice.label == "InterestIncomeExpenseNet + NoninterestIncome"
+
+
+def test_reported_revenue_is_never_replaced_by_the_calculation():
+    facts = facts_with({"Revenues": YEAR_2025, "InterestIncomeExpenseNet": YEAR_2025,
+                        "NoninterestIncome": YEAR_2025})
+    revenue = load_all_metrics(facts, 12)["revenue"]
+    assert revenue.choice.label == "Revenues"
+    assert list(revenue.annual["value"]) == [450]

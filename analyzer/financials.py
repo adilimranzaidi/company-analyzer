@@ -75,6 +75,10 @@ METRICS: tuple[Metric, ...] = (
         description="Interest earned on loans minus interest paid on deposits and debt (lenders).",
     ),
     Metric(
+        "noninterest_income", "Noninterest income", ("NoninterestIncome",), "flow",
+        description="Fees and other income that isn't interest (lenders).",
+    ),
+    Metric(
         "credit_provision", "Provision for credit losses",
         ("ProvisionForLoanLossesExpensed", "ProvisionForLoanLeaseAndOtherLosses",
          "ProvisionForLoanAndLeaseLosses", "ProvisionForCreditLosses"),
@@ -415,7 +419,48 @@ def mark_discontinued(results: dict[str, MetricData]) -> None:
             md.discontinued = gap > DISCONTINUED_AFTER_DAYS
 
 
+def sum_tables(a: pd.DataFrame, b: pd.DataFrame, quarterly: bool, source: str) -> pd.DataFrame:
+    """Add two metrics period by period (same fiscal period, ends within a week).
+    Periods where either is missing are left out rather than guessed."""
+    if a.empty or b.empty:
+        return _empty()
+    keys = ["fiscal_year", "fiscal_quarter"] if quarterly else ["fiscal_year"]
+    m = a.merge(b[keys + ["end", "value", "source"]], on=keys, suffixes=("", "_b"))
+    m = m[(m["end"] - m["end_b"]).apply(lambda d: abs(d.days) <= 7)].copy()
+    if m.empty:
+        return _empty()
+    m["value"] = m["value"] + m["value_b"]
+    m["source"] = [source + (" (uses a derived Q4)" if "Derived" in s1 + s2 else "")
+                   for s1, s2 in zip(m["source"], m["source_b"])]
+    return m[COLUMNS].sort_values("end").reset_index(drop=True)
+
+
+def calculated_bank_revenue(results: dict[str, MetricData]) -> MetricData | None:
+    """Some lenders (e.g. Synchrony) never tag total revenue. Banks' revenue is
+    conventionally net interest income + noninterest income (AmEx's reported revenue is
+    built the same way), so we calculate it, and label it as calculated."""
+    nii, fees = results.get("net_interest_income"), results.get("noninterest_income")
+    if not (nii and fees and nii.available and fees.available):
+        return None
+    source = "Calculated: Net interest income + Noninterest income"
+    annual = sum_tables(nii.annual, fees.annual, False, source)
+    quarterly = sum_tables(nii.quarterly, fees.quarterly, True, source)
+    if annual.empty and quarterly.empty:
+        return None
+    revenue_metric = next(m for m in METRICS if m.key == "revenue")
+    choice = LabelChoice(
+        f"{nii.choice.label} + {fees.choice.label}",
+        min(nii.choice.latest_end, fees.choice.latest_end),
+        results["revenue"].choice.passed_over if results["revenue"].choice else [],
+    )
+    return MetricData(revenue_metric, choice, annual, quarterly)
+
+
 def load_all_metrics(facts: dict, fye_month: int) -> dict[str, MetricData]:
     results = {m.key: load_metric(facts, m, fye_month) for m in METRICS}
     mark_discontinued(results)
+    if not results["revenue"].available:
+        calculated = calculated_bank_revenue(results)
+        if calculated is not None:
+            results["revenue"] = calculated
     return results
