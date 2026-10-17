@@ -24,4 +24,37 @@ A running record of what was built, what broke, and how it was fixed.
   the per-question cost for a personal tool.
 
 **What broke / how we fixed it**
-- Nothing yet.
+- **API key format confusion.** The Console's default key type ("linked to your account")
+  starts with `sk-ant-usr-`, not the older `sk-ant-api` style. Both are valid; we confirmed
+  the key with a free "list models" request. The first key was accidentally pasted into a
+  chat, so it was deleted and replaced. Rule: keys go only in `secrets.toml`.
+- **First GitHub push failed** ("Invalid username or token"). Git's sign-in window can't
+  open from a background process. Fix: run `git push` in a visible terminal so the GitHub
+  browser sign-in can appear.
+
+---
+
+## Step 1: Ticker lookup (2026-10-17)
+
+**What we did**
+- Added `analyzer/edgar_client.py`, the only file that contacts the SEC. It:
+  - converts a ticker to the SEC's company ID (CIK) using the SEC's official ticker list
+  - fetches the company's "submissions" record for industry, exchange, fiscal year end
+    and filer category
+  - sends the User-Agent on every request, waits 0.15s between requests (the SEC allows
+    10 per second), and saves downloads to `data/cache/` (ticker list refreshed daily,
+    company records every 6 hours)
+  - turns technical failures (no internet, SEC refusal, unknown ticker) into plain-English
+    messages
+- The dashboard now has a ticker box (default AXP) and a company card.
+- Added 15 automated tests (`tests/test_edgar_client.py`) that run without internet.
+
+**Things learned about EDGAR**
+- The SEC writes share classes with a dash (`BRK-B`), so the app converts `BRK.B` to `BRK-B`.
+- CIKs must be padded to 10 digits in SEC web addresses (`4962` → `0000004962`).
+- The SEC classifies AmEx as "Finance Services" (SIC 6199). We'll use this code later to
+  decide which metrics to highlight for banks versus other companies.
+
+**What broke / how we fixed it**
+- **Berkshire showed "NYSE, NYSE".** The SEC lists the exchange once per share class.
+  Fix: remove repeats while keeping the order.
