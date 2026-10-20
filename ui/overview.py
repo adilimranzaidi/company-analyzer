@@ -72,17 +72,18 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
 
     # --- Latest notable events (from 8-K filings) ----------------------------
     st.subheader("Latest notable events")
-    with st.spinner("Reading the company's 8-K filings (first time only)..."):
-        events = data.events(data.user_agent(), company.cik)
+    with st.spinner("Reading 8-K filings and daily prices (first time only)..."):
+        events, _ = data.all_events(data.user_agent(), company.cik, company.ticker)
     if not events:
         st.markdown(f'<div class="ca-muted">No notable 8-K events in the last '
                     f'{data.EVENT_YEARS} years.</div>', unsafe_allow_html=True)
     else:
         rows = []
         for e in events[:4]:
+            link = (f' · <a href="{html.escape(e.url, quote=True)}" target="_blank">{e.form}</a>'
+                    if e.url else "")
             rows.append(f'<div class="ca-row"><span>{html.escape(e.title)}</span>'
-                        f'<span>{e.date:%b %d, %Y} · <a href="{html.escape(e.url, quote=True)}" '
-                        f'target="_blank">{e.form}</a></span></div>')
+                        f'<span>{e.date:%b %d, %Y}{link}</span></div>')
         st.markdown("".join(rows), unsafe_allow_html=True)
 
     changes = unusual_changes(metrics, quarterly=True)

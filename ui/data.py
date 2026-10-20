@@ -13,6 +13,7 @@ from analyzer.filings import filings_table, latest_reports
 from analyzer.financials import MetricData, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, competition_text, suggest_peers
+from analyzer.prices import MARKET, PriceClient, PriceError, big_moves, describe_move
 
 
 def get_secret(name: str) -> str:
@@ -130,3 +131,33 @@ def event_headlines(ticker: str, day: date) -> tuple[list[dict], str]:
                                              day + timedelta(days=2)), ""
     except NewsError as err:
         return [], str(err)
+
+
+def price_moves(ticker: str) -> tuple[pd.DataFrame, str]:
+    """Big one-day stock moves over the event window, or ("", error message).
+    Not cached here (failures shouldn't be remembered); PriceClient saves prices to disk."""
+    try:
+        client = PriceClient(get_secret("TIINGO_API_KEY"))
+        start = date.today() - timedelta(days=round(365.25 * EVENT_YEARS))
+        stock = client.daily(ticker, start)
+        market = client.daily(MARKET, start)
+        return big_moves(stock, market), ""
+    except PriceError as err:
+        return pd.DataFrame(), str(err)
+
+
+def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
+    """8-K events plus big stock moves, newest first, and a note if prices are unavailable.
+    Each stock move lists any 8-K filed within three days, as a likely explanation."""
+    filed = events(agent, cik)
+    moves, note = price_moves(ticker)
+    combined = list(filed)
+    for _, row in moves.iterrows():
+        title, severity, explanation = describe_move(row, ticker)
+        nearby = [e for e in filed if abs((e.date - row["date"]).days) <= 3]
+        if nearby:
+            explanation += " Around the same days: " + "; ".join(
+                f"{e.title} ({e.date:%b %d})" for e in nearby) + "."
+        combined.append(Event(row["date"], "Stock move", title, severity, explanation, "",
+                              "Price data"))
+    return sorted(combined, key=lambda e: e.date, reverse=True), note

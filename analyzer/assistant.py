@@ -113,10 +113,14 @@ def dashboard_figures(company: Company, metrics: dict[str, MetricData],
                          f"is {format_pct(e['typical_growth'])}. First reported in the "
                          f"{e['orig_form']} filed {e['orig_filed']}.")
     if events:
-        lines.append("Notable events from the company's 8-K filings, most recent first:")
-        for e in events[:15]:
-            detail = f" The 8-K says: {e.evidence}" if e.evidence else ""
-            lines.append(f"On {e.date}, an 8-K reported: {e.title}.{detail}")
+        lines.append("Notable events, most recent first (from 8-K filings, and big one-day "
+                     "stock moves calculated by the dashboard from daily prices):")
+        for e in events[:20]:
+            if e.category == "Stock move":
+                lines.append(f"On {e.date}: {e.title}. {e.evidence}")
+            else:
+                detail = f" The 8-K says: {e.evidence}" if e.evidence else ""
+                lines.append(f"On {e.date}, an 8-K reported: {e.title}.{detail}")
     return "\n".join(lines)
 
 

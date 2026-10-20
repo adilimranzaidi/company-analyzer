@@ -423,3 +423,33 @@ senior executive changes. Routine 8-Ks (earnings releases, investor presentation
 - **Name clash** in the assistant's "Dashboard figures": two different lists were both
   called `events`. Renamed.
 - 10 new tests (113 total).
+
+---
+
+## Stock moves from Tiingo (2026-10-20)
+
+**Why Tiingo:** Finnhub's free plan has no price history, and Stooq now requires a
+"verify you're a browser" check (which we don't bypass). Tiingo is an official API with a
+free plan (approximately 50 requests an hour, 1,000 a day, 500 symbols a month).
+
+**What we did** (`analyzer/prices.py`)
+- Daily **adjusted** closing prices (adjusted for splits and dividends) for the company and
+  for SPY (S&P 500), saved for 12 hours. The token is sent as a request header, not in the
+  web address.
+- **Market-adjusted return** = the stock's daily return − SPY's daily return. A day is flagged
+  when that is more than 4 typical deviations from normal (median absolute deviation) **and**
+  the stock itself moved at least 4%. So a market-wide crash isn't reported as company news.
+- Each flagged day becomes a "Stock move" notable event, with a plain-English explanation
+  ("AXP fell 9.8% while the S&P 500 fell 0.4%...") and any 8-K filed within three days
+  listed as a likely cause. Headlines for that day appear for events in the last year.
+- Stock moves also appear on the Overview and are given to the Ask assistant.
+- New glossary entry: Market-adjusted return. New setup-check line and secrets-template line.
+- 8 new tests (121 total): company-specific crash flagged, market-wide crash not flagged,
+  small moves ignored, too little history means no flags.
+
+**What broke / how we fixed it**
+- A test failed because the made-up stock and market moved identically every ordinary day,
+  so the "typical deviation" was exactly zero, and the code correctly refuses to divide by
+  zero. Real prices never behave like that; the test data now has a slightly different
+  market path.
+- **Not yet tested with real prices**: waiting for a Tiingo token.

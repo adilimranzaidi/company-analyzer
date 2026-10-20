@@ -18,12 +18,17 @@ SEVERITY_LABEL = {"high": "Serious", "medium": "Notable"}
 def _event_html(e: Event) -> str:
     badge = (f'<span class="ca-badge ca-badge-{e.severity}">'
              f'{SEVERITY_LABEL.get(e.severity, "")}</span>')
-    evidence = (f'<blockquote>{html.escape(e.evidence)}</blockquote>'
-                '<div class="ca-muted">Detected from the 8-K\'s own text; check the quote.</div>'
-                if e.evidence else "")
+    link = (f' · <a href="{html.escape(e.url, quote=True)}" target="_blank">{e.form}</a>'
+            if e.url else "")
+    if e.category == "Stock move":
+        evidence = f'<div class="ca-muted">{html.escape(e.evidence)}</div>'
+    elif e.evidence:
+        evidence = (f'<blockquote>{html.escape(e.evidence)}</blockquote>'
+                    '<div class="ca-muted">Detected from the 8-K\'s own text; check the quote.</div>')
+    else:
+        evidence = ""
     return (f'<div class="ca-event"><div class="ca-event-date">{e.date:%b %d, %Y}</div>'
-            f'<div>{badge} <b>{html.escape(e.title)}</b> · '
-            f'<a href="{html.escape(e.url, quote=True)}" target="_blank">{e.form}</a>'
+            f'<div>{badge} <b>{html.escape(e.title)}</b>{link}'
             f'{evidence}</div></div>')
 
 
@@ -43,14 +48,18 @@ def render(company: Company) -> None:
         f"releases, investor presentations) are left out. Last {data.EVENT_YEARS} years.</div>",
         unsafe_allow_html=True)
 
-    with st.spinner("Reading the company's 8-K filings (first time only)..."):
-        events = data.events(data.user_agent(), company.cik)
-
-    placeholder(
-        "<b>Big stock-price moves</b> (for example a 9% drop on a day the stock normally "
-        "moves 1%) will appear here once a free daily-price source is connected. Finnhub's "
-        "free plan doesn't include price history."
-    )
+    with st.spinner("Reading 8-K filings and daily prices (first time only)..."):
+        events, price_note = data.all_events(data.user_agent(), company.cik, company.ticker)
+    st.markdown(
+        '<div class="ca-muted"><b>Stock moves</b> are days the stock moved far more than usual '
+        "<i>after allowing for the whole market's move that day</i> (compared with SPY, which "
+        "tracks the S&amp;P 500), and by at least 4%. Prices from Tiingo.</div>",
+        unsafe_allow_html=True)
+    if price_note:
+        setup = (" Sign up free at tiingo.com, then add <code>TIINGO_API_KEY = "
+                 "\"your-token\"</code> to <code>.streamlit/secrets.toml</code> and restart "
+                 "the dashboard." if "TIINGO_API_KEY" in price_note else "")
+        placeholder(html.escape(price_note) + setup)
     if not events:
         st.info(f"No notable 8-K events in the last {data.EVENT_YEARS} years. Routine filings "
                 "are listed in the Filings section.")

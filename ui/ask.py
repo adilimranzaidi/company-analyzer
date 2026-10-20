@@ -128,7 +128,8 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
             try:
                 answer = ask(api_key, company, question, relevant,
                              dashboard_figures(company, metrics,
-                                               data.events(data.user_agent(), company.cik)),
+                                               data.all_events(data.user_agent(), company.cik,
+                                                               company.ticker)[0]),
                              previous)
             except Exception as err:            # shown to the user, never a crash
                 st.error(friendly_error(err))

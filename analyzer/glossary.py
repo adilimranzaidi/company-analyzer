@@ -140,6 +140,13 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "the average so one unusual company can't distort the comparison.",
     },
     # --- Reporting concepts ----------------------------------------------------------------
+    "Market-adjusted return": {
+        "short": "A stock's daily move minus the overall market's move that day.",
+        "long": "Also called excess return. If a stock fell 9% on a day the S&P 500 rose 1%, "
+                "its market-adjusted return was about -10%: a sign of company-specific news. "
+                "The dashboard flags days when this is far outside the stock's normal range "
+                "and the stock moved at least 4%.",
+    },
     "Fiscal year": {
         "short": "The 12-month period a company uses for its accounts.",
         "long": "Many companies use the calendar year, but not all: Apple's fiscal year ends "
@@ -172,7 +179,9 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "of a major event, using the SEC's official event types (restatements, "
                 "cybersecurity incidents, listing problems, acquisitions, write-downs). "
                 "Executive changes are confirmed from the 8-K's own text, and the sentence "
-                "is shown. Routine 8-Ks such as quarterly earnings releases are left out.",
+                "is shown. Routine 8-Ks such as quarterly earnings releases are left out. "
+                "Also included: days the stock moved far more than usual after allowing for "
+                "the overall market's move (see Market-adjusted return).",
     },
     "10-K": {
         "short": "A company's annual report to the SEC.",

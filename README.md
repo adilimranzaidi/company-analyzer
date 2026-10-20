@@ -28,7 +28,7 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 4. ✅ Filings list: latest 10-K, 10-Q and 8-K filings with links, and 8-K event types in
    plain English
 5. ✅ Ask: a chat assistant that answers from the filings and the dashboard's own figures,
-   with numbered, quoted sources (Claude Opus 5.5 with the Citations feature)
+   with numbered, quoted sources (Claude Haiku 5.5 with the Citations feature)
    - 5b. "Explain from filing": management's own explanation of each notable event, cited
    - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,
      key risks and interview talking points, all cited
@@ -57,6 +57,7 @@ Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in:
 - `SEC_USER_AGENT`: your name and email (the SEC requires this on every request)
 - `ANTHROPIC_API_KEY`: your key from the Anthropic Console
 - `FINNHUB_API_KEY`: a free key from finnhub.io (for headlines)
+- `TIINGO_API_KEY`: a free token from tiingo.com (for daily stock prices)
 
 Then start the dashboard:
 
@@ -82,4 +83,5 @@ BUILD_LOG.md           what was built, what broke, and how it was fixed
 - [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces):
   company facts (XBRL), submissions, industry lists, and "frames" (one figure for every company)
 - [Finnhub](https://finnhub.io/): company news by ticker, for headlines (free key)
-- [Anthropic Claude API](https://docs.anthropic.com/): the Ask assistant (Claude Opus 5.5, Citations)
+- [Tiingo](https://www.tiingo.com/): daily stock prices, for big-move detection (free key)
+- [Anthropic Claude API](https://docs.anthropic.com/): the Ask assistant (Claude Haiku 5.5, Citations)
