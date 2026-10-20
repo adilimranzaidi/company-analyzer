@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
+from analyzer.filing_text import Passage, filing_passages
 from analyzer.filings import filings_table
 from analyzer.financials import MetricData, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
@@ -52,6 +53,12 @@ def metrics(agent: str, cik: str, fye_month: int) -> dict[str, MetricData]:
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
 def filings(agent: str, cik: str) -> pd.DataFrame:
     return filings_table(edgar_client(agent).submissions(cik), cik)
+
+
+@st.cache_data(ttl=7 * 24 * 3600, show_spinner=False)
+def passages(agent: str, url: str, label: str, form: str) -> list[Passage]:
+    """A filing split into labelled passages (filings never change once filed)."""
+    return filing_passages(edgar_client(agent).download_text, url, label, form)
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)

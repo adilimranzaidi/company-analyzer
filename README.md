@@ -27,7 +27,8 @@ that files with the U.S. Securities and Exchange Commission (SEC).
    Compare up to five companies; Headlines from Finnhub
 4. ✅ Filings list: latest 10-K, 10-Q and 8-K filings with links, and 8-K event types in
    plain English
-5. A question box answered from the filings themselves, with citations
+5. ✅ Ask: a chat assistant that answers from the filings and the dashboard's own figures,
+   with numbered, quoted sources (Claude Opus 5.5 with the Citations feature)
    - 5b. "Explain from filing": management's own explanation of each notable event, cited
    - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,
      key risks and interview talking points, all cited
@@ -68,9 +69,9 @@ streamlit run app.py
 ```
 app.py                 the page frame: search, company header, section menu
 ui/                    one file per section (Overview, Company trends, Industry,
-                       Compare, Headlines, Filings and Q&A); layout only
+                       Compare, Headlines, Filings, Ask); layout only
 analyzer/              all data and math: SEC client, data cleaning, metrics,
-                       peers, comparisons, headlines
+                       peers, comparisons, headlines, filing reader, search, assistant
 tests/                 automated checks for every calculation and cleaning rule
 .streamlit/            theme (EB Garamond) and settings; private secrets (never uploaded)
 BUILD_LOG.md           what was built, what broke, and how it was fixed
@@ -81,4 +82,4 @@ BUILD_LOG.md           what was built, what broke, and how it was fixed
 - [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces):
   company facts (XBRL), submissions, industry lists, and "frames" (one figure for every company)
 - [Finnhub](https://finnhub.io/): company news by ticker, for headlines (free key)
-- [Anthropic Claude API](https://docs.anthropic.com/): for filing Q&A and synopses (upcoming)
+- [Anthropic Claude API](https://docs.anthropic.com/): the Ask assistant (Claude Opus 5.5, Citations)

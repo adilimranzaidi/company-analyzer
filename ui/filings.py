@@ -1,5 +1,4 @@
-"""Filings and Q&A: the company's 10-K, 10-Q and 8-K filings with links. The question
-box arrives in Step 5."""
+"""Filings: the company's 10-K, 10-Q and 8-K filings with links."""
 
 from datetime import date, timedelta
 
@@ -9,7 +8,6 @@ import streamlit as st
 from analyzer.edgar_client import Company
 from analyzer.filings import filings_table, latest_reports
 from ui import data
-from ui.style import placeholder
 
 TYPES = {"Annual (10-K)": ("10-K", "10-K/A", "20-F", "40-F"),
          "Quarterly (10-Q)": ("10-Q", "10-Q/A"),
@@ -79,11 +77,6 @@ def render(company: Company) -> None:
                    "type of event, not its details. The SEC's recent list covers about the "
                    "last 1,000 filings of all kinds.")
 
-    # --- Q&A (Step 5) ---------------------------------------------------------------
-    st.subheader("Ask about this company")
-    placeholder(
-        "<b>Coming in Step 5:</b> a chat assistant that answers questions from the filings "
-        "above, with citations, explains the dashboard's figures and terms, and says so when "
-        "the filings don't answer a question. Step 5b adds \"Explain from filing\" for each "
-        "notable event."
-    )
+    st.markdown('<div class="ca-muted">Questions about these filings? Use the <b>Ask</b> '
+                "section: it reads the latest 10-K and 10-Q (or any you choose) and answers "
+                "with citations.</div>", unsafe_allow_html=True)

@@ -28,6 +28,10 @@ h1 { font-size: 2.3rem !important; }
 /* Cards for the latest reports */
 .ca-card { background: #f3f1ea; border-radius: 6px; padding: 0.9rem 1.1rem; height: 100%; }
 .ca-card-title { font-size: 1.2rem; margin: 0.15rem 0; }
+/* Answer sources */
+.ca-source { margin: 0.4rem 0 0.8rem; }
+.ca-source blockquote { margin: 0.3rem 0 0 0; padding: 0.2rem 0 0.2rem 0.8rem;
+  border-left: 3px solid #d6d2c4; color: #4a4944; font-size: 0.95rem; white-space: pre-wrap; }
 /* No link icons next to headings */
 [data-testid="stHeaderActionElements"] { display: none !important; }
 /* App name: one line, quieter than the company name */

@@ -314,3 +314,53 @@ the time on this network. Finnhub looks news up by ticker, so "V" means Visa the
   to December 2019). Older filings are in extra files we don't load yet.
 - An 8-K's item codes describe the *type* of event, not its details. Reading the
   documents is Step 5's job.
+
+---
+
+## Step 5: The Ask assistant (2026-10-20)
+
+**How it works**
+1. **Filing reader** (`analyzer/filing_text.py`): downloads the chosen 10-K/10-Q (once,
+   then cached), strips the HTML and hidden XBRL data, keeps each table row on one line
+   ("Provisions | 1,100 | 900"), follows "Item 7." headings and ALL-CAPS subheadings, and
+   cuts the text into ~450-word passages labelled like "Item 7. MD&A › Provisions for
+   credit losses". AmEx's 10-K becomes about 305 passages.
+2. **Search** (`analyzer/search.py`): BM25 keyword scoring, a standard search-engine
+   formula, in plain Python with no new installs and no AI. It picks ~18 passages per
+   question, with each chosen filing guaranteed a fair share. Follow-up questions also
+   use the previous question's words.
+3. **Claude** (`analyzer/assistant.py`): Claude Opus 5.5 at high effort, with the
+   **Citations** feature. Every passage is a separate document; Anthropic guarantees cited
+   text really appears in it. Claude also receives "Dashboard figures" (numbers calculated
+   by our Python code, as sentences) and "How the dashboard works" (our methods), so it can
+   explain the dashboard, with citations too.
+4. **Rules given to Claude:** company facts only from the documents; never calculate;
+   label general finance knowledge with "In general,"; say plainly when the documents
+   don't answer, and where to look; no investment advice.
+5. **Server-side fallback** is enabled (`fallbacks: "default"`): if Claude's safety
+   filter wrongly declines a harmless question, Anthropic re-runs it on a recommended
+   backup model, and the answer is labelled.
+6. **The Ask section:** starter questions, a chat with follow-ups, numbered [n] markers,
+   a Sources panel (filing, section, exact quote, link), an estimated cost per answer, and
+   a chooser for which filings to read (default: latest 10-K and 10-Q, up to four).
+
+**Tested with real questions** (about $0.13 each, 10-25 seconds):
+- Credit losses: cited the 10-Q's explanation (a reserve release driven by lower
+  delinquencies) and the dashboard's -22.8%.
+- Return on equity: labelled the general explanation, cited the dashboard's 34.0% / 34.4%,
+  and found AmEx's own 33.9% in the 10-K, explaining why the two differ.
+- "Market share in Japan in 1995": said the filings don't address it, listed what was
+  searched, and invented nothing.
+
+**What broke / how we fixed it**
+- **Search favored the long 10-K** and missed the 10-Q's company-wide explanation. Fix:
+  each filing gets a fair share of passages. Confirmed: the next answer found it.
+- **Table numbers lost their column headings** ("33.9 | 34.6 | 31.5" without the years)
+  when a passage ended mid-table. Fix: passages avoid ending inside a table, and a very
+  long table's next passage repeats its heading row. Confirmed on AmEx's 10-K.
+- **Page headers leaked into passages** ("Table of / Contents"). Now filtered.
+- **Dollar signs:** Streamlit reads text between two "$" as a maths formula, so dollar
+  signs in answers are escaped.
+- **Two test-setup mistakes** (sample text shorter than the 30-word passage minimum; an
+  unrealistic table test). Fixed the tests, and the second led to the heading-row fix.
+- 15 new tests (99 total).

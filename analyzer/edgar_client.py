@@ -203,6 +203,10 @@ class EdgarClient:
     def _download_json(self, url: str) -> dict:
         return self._download(url).json()
 
+    def download_text(self, url: str) -> str:
+        """A filing document's HTML (paced and identified like every SEC request)."""
+        return self._download(url).text
+
     def _download(self, url: str, params: dict | None = None) -> requests.Response:
         wait = MIN_SECONDS_BETWEEN_REQUESTS - (time.time() - self._last_request_time)
         if wait > 0:

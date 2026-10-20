@@ -1,0 +1,124 @@
+"""Checks for the filing reader, passage search, and how answers and citations are
+assembled. None of these call the internet or the Claude API."""
+
+from types import SimpleNamespace
+
+from analyzer.assistant import build_documents, parse_answer, search_query
+from analyzer.filing_text import Passage, html_to_lines, split_passages
+from analyzer.search import BM25, tokenize, top_passages
+
+FILING_HTML = """
+<html><body>
+<div style="display:none"><ix:header>hidden XBRL data</ix:header></div>
+<p>PART I</p>
+<p>ITEM 1. BUSINESS</p>
+<p>We operate a global payments network. Card members spend on our cards. """ + "More detail about the business. " * 8 + """</p>
+<p>12</p>
+<p>ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION</p>
+<p>PROVISIONS FOR CREDIT LOSSES</p>
+<p>Provisions increased due to higher net write-offs and a reserve build. """ + "Further discussion of credit trends. " * 8 + """</p>
+<table><tr><td>Provisions</td><td>$</td><td>1,100</td><td>900</td></tr></table>
+</body></html>
+"""
+
+
+# --- Reading filings ----------------------------------------------------------
+
+def test_html_to_lines_drops_hidden_data_and_page_numbers_and_keeps_table_rows():
+    lines = html_to_lines(FILING_HTML)
+    assert "hidden XBRL data" not in " ".join(lines)
+    assert "12" not in lines                                   # page number
+    assert "Provisions | 1,100 | 900" in lines                  # table row on one line
+
+
+def test_passages_are_labelled_with_item_and_heading():
+    lines = html_to_lines(FILING_HTML)
+    passages = split_passages(lines, "10-K FY2025", "https://sec.gov/x", "10-K")
+    sections = [p.section for p in passages]
+    assert any(s.startswith("Item 1. Business") for s in sections)
+    assert "Item 7. Management’s discussion and analysis (MD&A) › Provisions for credit losses"         in sections
+
+
+def test_part_ii_prefix_only_for_10q():
+    lines = ["PART II", "Item 1A. Risk Factors"] + ["word"] * 40
+    q = split_passages(lines, "10-Q", "u", "10-Q")[0].section
+    k = split_passages(lines, "10-K", "u", "10-K")[0].section
+    assert q.startswith("Part II, Item 1A") and k.startswith("Item 1A")
+
+
+# --- Search ---------------------------------------------------------------------
+
+def test_tokenize_drops_common_words_and_plurals():
+    assert tokenize("What are the company's credit losses?") == ["credit", "loss"]
+
+
+def test_bm25_ranks_the_relevant_passage_first():
+    index = BM25(["card members spend on cards", "provision for credit losses rose",
+                  "the weather was nice"])
+    scores = index.scores("Why did credit losses rise?")
+    assert scores.index(max(scores)) == 1
+    assert scores[2] == 0
+
+
+def p(filing, text, section="Item 7"):
+    return Passage(filing, section, text, "u")
+
+
+def test_each_filing_gets_a_fair_share():
+    # A long 10-K full of matches must not crowd out the 10-Q's one relevant passage.
+    passages = [p("10-K", "credit losses credit losses") for _ in range(20)] + \
+               [p("10-Q", "credit losses this quarter")]
+    chosen = top_passages(passages, "credit losses", k=4)
+    assert len(chosen) == 4
+    assert any(c.filing == "10-Q" for c in chosen)
+
+
+def test_follow_up_questions_include_the_previous_question():
+    assert search_query("why?", [("What drove credit losses?", "...")]) == \
+        "why? What drove credit losses?"
+
+
+# --- Answers and citations ------------------------------------------------------
+
+def test_documents_put_dashboard_figures_and_methods_first():
+    docs, meta = build_documents([p("10-Q Q2", "text")], "figures")
+    assert [d["title"] for d in docs][:2] == ["Dashboard figures", "How the dashboard works"]
+    assert all(d["citations"] == {"enabled": True} for d in docs)    # all or none
+    assert meta[2]["title"] == "10-Q Q2, Item 7"
+
+
+def block(text, citations=None):
+    return SimpleNamespace(type="text", text=text, citations=citations)
+
+
+def cite(index, quote):
+    return SimpleNamespace(type="char_location", document_index=index, cited_text=quote)
+
+
+def test_parse_answer_numbers_sources_and_reuses_numbers():
+    meta = [{"title": "Dashboard figures", "url": ""}, {"title": "Methods", "url": ""},
+            {"title": "10-Q, Item 2", "url": "https://sec.gov/q"}]
+    content = [
+        SimpleNamespace(type="thinking", thinking=""),            # ignored
+        block("Provisions fell"),
+        block(" 22.8%", [cite(0, "was $1.1B, -22.8%")]),
+        block(" because delinquencies were lower", [cite(2, "driven by lower delinquencies")]),
+        block(" (again", [cite(0, "was $1.1B, -22.8%")]),          # same quote: same number
+        block(")."),
+    ]
+    marked, plain, sources = parse_answer(content, meta)
+    assert marked == ("Provisions fell 22.8% [1] because delinquencies were lower [2] "
+                      "(again [1]).")
+    assert plain == "Provisions fell 22.8% because delinquencies were lower (again)."
+    assert [(s.number, s.title, s.url) for s in sources] == [
+        (1, "Dashboard figures", ""), (2, "10-Q, Item 2", "https://sec.gov/q")]
+
+
+def test_tables_are_not_cut_in_half():
+    header = "(Millions) | 2025 | 2024 | 2023"
+    rows = [f"Line item {i} | {i},000 | {i},100 | {i},200" for i in range(40)]
+    lines = ["ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS", "Some introduction text " * 3,
+             header] + rows + ["Closing paragraph after the table " * 3]
+    passages = split_passages(lines, "10-K", "u", "10-K", target_words=60)
+    holding_rows = [p for p in passages if "Line item 39" in p.text]
+    assert holding_rows and header in holding_rows[0].text      # last row keeps its headings
