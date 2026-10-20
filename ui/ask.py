@@ -37,7 +37,8 @@ def _show_answer(answer: Answer) -> None:
                             f'{html.escape(s.title)}{link}<blockquote>{quote}</blockquote></div>',
                             unsafe_allow_html=True)
     extra = f" · {answer.note}" if answer.note else ""
-    st.caption(f"Estimated cost: ${answer.cost:.2f}{extra}")
+    cost = f"${answer.cost:.4f}" if answer.cost < 0.01 else f"${answer.cost:.2f}"
+    st.caption(f"Estimated cost: {cost}{extra}")
 
 
 def render(company: Company, metrics: dict[str, MetricData]) -> None:
@@ -71,8 +72,9 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     st.markdown(
         f'<div class="ca-muted">Ask about {html.escape(name)} or anything on the dashboard. '
         "Answers come only from the chosen filings and the dashboard's own figures, with "
-        "numbered sources; if they don't cover your question, the assistant says so. Each "
-        "question costs roughly 5 to 15 cents. Not investment advice.</div>",
+        "numbered sources; if they don't cover your question, the assistant says so. Uses "
+        "Claude Haiku 5.5: each question costs a fraction of a cent of your Anthropic "
+        "credit. Not investment advice.</div>",
         unsafe_allow_html=True)
 
     # --- Conversation ------------------------------------------------------------------
@@ -120,7 +122,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
                                           row["form"])
         previous = [(t["question"], t["answer"].plain_text) for t in history]
         relevant = top_passages(passages, search_query(question, previous))
-        with st.spinner("Thinking (usually 15 to 30 seconds)..."):
+        with st.spinner("Thinking (usually 5 to 15 seconds)..."):
             try:
                 answer = ask(api_key, company, question, relevant,
                              dashboard_figures(company, metrics), previous)

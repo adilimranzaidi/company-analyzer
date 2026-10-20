@@ -21,15 +21,16 @@ from analyzer.filing_text import Passage
 from analyzer.financials import MetricData
 from analyzer.metrics import add_growth, notable_events
 
-MODEL = "claude-opus-5-5"
-EFFORT = "high"              # accuracy matters more than speed here
+# Claude Haiku 5.5: the smallest current Claude model, chosen to keep questions to a
+# fraction of a cent (Opus 5.5 was ~13 cents a question). The accuracy safeguards don't
+# depend on the model: citations are still guaranteed to quote the documents.
+MODEL = "claude-haiku-5-5"
+EFFORT = "high"              # more careful reading; still a fraction of a cent per question
 MAX_TOKENS = 16000
 HISTORY_TURNS = 4            # earlier questions and answers sent for follow-up context
-# Price per million tokens for Claude Opus 5.5, used only to show an estimated cost.
-PRICE_IN, PRICE_OUT = 4.00, 20.00
-# If Claude's safety filter wrongly declines a harmless question, Anthropic re-runs it on a
-# recommended backup model instead of failing (server-side fallback).
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# Price per million tokens for Claude Haiku 5.5 (prompts up to 100K tokens), used only to
+# show an estimated cost. Our prompts are about 15-25K tokens.
+PRICE_IN, PRICE_OUT = 0.10, 0.50
 
 SYSTEM_PROMPT = """You are the research assistant inside Company Analyzer, a dashboard about {name} ({ticker}). \
 The person asking is learning finance for job interviews: explain in plain English and briefly define any jargon you use.
@@ -130,7 +131,7 @@ class Answer:
     text: str                                   # markdown with [1]-style source markers
     sources: list[Source] = field(default_factory=list)
     cost: float = 0.0                           # estimated, in US dollars
-    note: str = ""                              # e.g. a refusal or a fallback model was used
+    note: str = ""                              # e.g. a refusal, or the answer was cut off
     plain_text: str = ""                        # answer without markers, for follow-up context
 
 
@@ -190,27 +191,24 @@ def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
     messages.append({"role": "user", "content": docs + [{"type": "text", "text": question}]})
 
-    response = client.beta.messages.create(
+    response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT.format(name=pretty_company_name(company.name), ticker=company.ticker),
         messages=messages,
         output_config={"effort": EFFORT},
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
     )
 
     usage = response.usage
     cost = ((usage.input_tokens + (getattr(usage, "cache_creation_input_tokens", 0) or 0))
             * PRICE_IN + usage.output_tokens * PRICE_OUT) / 1_000_000
     if response.stop_reason == "refusal":
-        return Answer("I can't answer that one. Try rephrasing it as a question about the "
-                      "company's filings or the dashboard's figures.", cost=cost,
+        return Answer("I can't answer that one. Safety checks occasionally decline harmless "
+                      "questions; try rephrasing it as a question about the company's filings "
+                      "or the dashboard's figures.", cost=cost,
                       note="The request was declined by Claude's safety checks.")
     text, plain, sources = parse_answer(response.content, meta)
     note = ""
-    if any(getattr(b, "type", "") == "fallback" for b in response.content):
-        note = f"Answered by the backup model ({response.model})."
     if response.stop_reason == "max_tokens":
         note = "The answer was cut off because it reached the length limit."
     return Answer(text or "(No answer was returned.)", sources, cost, note, plain)
