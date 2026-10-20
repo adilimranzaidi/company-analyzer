@@ -37,8 +37,10 @@ def _show_answer(answer: Answer) -> None:
                             f'{html.escape(s.title)}{link}<blockquote>{quote}</blockquote></div>',
                             unsafe_allow_html=True)
     extra = f" · {answer.note}" if answer.note else ""
-    cost = f"${answer.cost:.4f}" if answer.cost < 0.01 else f"${answer.cost:.2f}"
-    st.caption(f"Estimated cost: {cost}{extra}")
+    # Shown in cents: "$0.0045" was easy to misread as 4 cents; it's under half a cent.
+    cents = answer.cost * 100
+    cost = f"{cents:.2f}¢" if cents < 1 else f"{cents:.1f}¢"
+    st.caption(f"Estimated cost of this answer: {cost} (of your Anthropic credit){extra}")
 
 
 def render(company: Company, metrics: dict[str, MetricData]) -> None:
