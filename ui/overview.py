@@ -9,6 +9,7 @@ from analyzer.charts import bar_chart, format_pct, format_ratio, format_value
 from analyzer.compare import trailing_roe_latest
 from analyzer.edgar_client import Company
 from analyzer.filings import index_url
+from analyzer.glossary import short
 from analyzer.financials import MetricData
 from analyzer.metrics import add_growth, notable_events
 from ui.style import placeholder
@@ -57,8 +58,8 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         for col, (label, value, change, p) in zip(cols, tiles):
             delta = None if change in (None, "n/m") else f"{change} vs. a year ago"
             col.metric(label, value, delta=delta,
-                       help=f"{p}." + (" Return on equity uses the last 4 quarters."
-                                       if label == "Return on equity" else ""))
+                       help=f"{short(label)} ({p}" + (", last 4 quarters" if label ==
+                                                      "Return on equity" else "") + ")")
         src = metrics["revenue"].quarterly.iloc[-1] if rev is not None else None
         if src is not None:
             st.markdown(f'<div class="ca-muted">From the {src["form"]} filed {src["filed"]}. '

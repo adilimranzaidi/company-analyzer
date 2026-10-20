@@ -11,7 +11,8 @@ from analyzer.compare import industry_medians, rank_in_group
 from analyzer.edgar_client import Company
 from analyzer.financials import MetricData
 from ui import data
-from ui.peer_tables import SERIES_CHOICES, load_many, series_for, snapshot_row, snapshots
+from ui.peer_tables import (SERIES_CHOICES, column_help, load_many, series_for, snapshot_row,
+                             snapshots)
 from ui.style import placeholder
 
 
@@ -19,16 +20,28 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
     by_label = {o["label"]: o for o in options}
     self_label = next((o["label"] for o in options if o["ticker"] == company.ticker), company.ticker)
 
-    with st.spinner("Finding companies in the same SEC industry..."):
+    with st.spinner("Finding competitors (reading the 10-K the first time)..."):
         suggested = data.peers(data.user_agent(), company.cik, company.sic_code)
     suggested_labels = [f"{p.name} ({p.ticker})" for p in suggested]
     suggested_labels = [l for l in suggested_labels if l in by_label]
 
-    st.markdown(
-        f'<div class="ca-muted">Suggested peers share {company.ticker}\'s SEC industry code '
-        f'<b>{company.sic_code} ({company.industry})</b> and are ranked by total assets. '
-        "SEC codes are broad, so edit the list to fit: remove companies that aren't true "
-        "peers, and search to add others.</div>", unsafe_allow_html=True)
+    named = [p for p in suggested if p.source == "Named in the 10-K"]
+    by_code = [p for p in suggested if p.source != "Named in the 10-K"]
+    explain = []
+    if named:
+        explain.append(f"<b>Named as competitors in {company.ticker}'s 10-K:</b> "
+                       + ", ".join(p.ticker for p in named))
+    if by_code:
+        explain.append(f"<b>Same SEC industry code</b> ({company.sic_code}, {company.industry}), "
+                       "largest first: " + ", ".join(p.ticker for p in by_code))
+    explain.append("Edit the list to fit: remove companies that aren't true peers, and "
+                   "search to add others.")
+    st.markdown('<div class="ca-muted">' + "<br>".join(explain) + "</div>",
+                unsafe_allow_html=True)
+    if named:
+        with st.expander("Where the 10-K names them"):
+            for p in named:
+                st.markdown(f"**{p.ticker}** ({p.name}): “{p.evidence}”")
 
     key = f"peers_{company.ticker}"
     st.session_state.setdefault(key, suggested_labels)
@@ -54,7 +67,7 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
         "EPS growth": format_pct(med["eps_growth"]),
         "Latest quarter revenue growth": format_pct(med["quarter_revenue_growth"]),
     })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=column_help())
     st.caption("Each company's own latest fiscal year; year-ends differ between companies. "
                "The median (middle value) is used so one unusual company can't skew it.")
 

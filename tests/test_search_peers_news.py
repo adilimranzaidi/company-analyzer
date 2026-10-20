@@ -159,3 +159,40 @@ def test_saved_headlines_are_shown_when_finnhub_is_unavailable(tmp_path):
     result = client.company_news("AXP", today=date(2026, 10, 17))
     assert [a["title"] for a in result.articles] == ["AmEx news"]
     assert result.saved_hours_ago == pytest.approx(3, abs=0.1)
+
+
+# --- Competitors named in the 10-K --------------------------------------------
+
+from analyzer.peers import brand_name, find_named_competitors
+
+COMPETITION = ("Our global card network competes with other card networks, including, among "
+               "others, Visa, Mastercard and Discover (owned by Capital One). Principal "
+               "competitive factors include rewards. Customers expect strong security; our "
+               "customers value service. We have offices in the District of Columbia.")
+LISTED = [
+    {"cik": "1", "ticker": "V", "name": "Visa Inc."},
+    {"cik": "2", "ticker": "MA", "name": "Mastercard Inc"},
+    {"cik": "3", "ticker": "COF", "name": "CAPITAL ONE FINANCIAL CORP"},
+    {"cik": "4", "ticker": "PFG", "name": "PRINCIPAL FINANCIAL GROUP INC"},
+    {"cik": "5", "ticker": "CUBI", "name": "Customers Bancorp, Inc."},
+    {"cik": "6", "ticker": "CLBK", "name": "Columbia Financial, Inc."},
+    {"cik": "7", "ticker": "TINY", "name": "Mastercard Tiny Shell Corp"},
+    {"cik": "9", "ticker": "AXP", "name": "AMERICAN EXPRESS CO"},
+]
+ASSETS = {c: 50e9 for c in "1234569"} | {"7": 1e6}
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("CAPITAL ONE FINANCIAL CORP", "Capital One"),
+    ("Visa Inc.", "Visa"),
+    ("PayPal Holdings, Inc.", "PayPal"),
+])
+def test_brand_name(raw, expected):
+    assert brand_name(raw) == expected
+
+
+def test_named_competitors_are_found_and_ordinary_words_are_not():
+    found = find_named_competitors(COMPETITION, LISTED, exclude_cik="9", assets_by_cik=ASSETS)
+    assert sorted(p.ticker for p in found) == ["COF", "MA", "V"]
+    assert all(p.source == "Named in the 10-K" for p in found)
+    assert "Capital One" in next(p for p in found if p.ticker == "COF").evidence

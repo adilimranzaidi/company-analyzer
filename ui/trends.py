@@ -8,6 +8,8 @@ import streamlit as st
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value, ratio_chart
 from analyzer.edgar_client import Company
 from analyzer.filings import index_url
+from analyzer.glossary import short
+from ui.terms import explain
 from analyzer.financials import MetricData
 from analyzer.metrics import add_growth, margin_tables, notable_events, roe_annual, roe_trailing
 
@@ -71,7 +73,7 @@ def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, ke
     st.plotly_chart(bar_chart(df, md.metric.name, md.metric.unit,
                               unusual=unusual.get(md.metric.key)),
                     config={"displayModeBar": False}, width="stretch", key=key)
-    st.caption(f"{md.metric.description} EDGAR label: `{md.choice.label}`"
+    st.caption(f"{explain(md.metric.name) or md.metric.description} EDGAR label: `{md.choice.label}`"
                + (f"  \n{md.note}" if md.note else ""))
     notes = set(df["source"]) - {"Reported"}
     if md.metric.key == "eps_diluted":
@@ -157,7 +159,11 @@ def _growth(shown, metrics, quarterly, years):
         if quarterly:
             row["vs. previous quarter"] = format_pct(last["qoq_growth"])
         rows.append(row)
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
+        "vs. a year earlier": st.column_config.TextColumn(help=short("Year-over-year growth")),
+        "vs. previous quarter": st.column_config.TextColumn(
+            help=short("Quarter-over-quarter growth")),
+    })
     st.caption("n/m = not meaningful (the earlier figure was zero, negative or missing).")
 
     charts = [(r.name, r.formula, df) for r, df in margin_tables(metrics, quarterly).values()]
@@ -185,7 +191,7 @@ def _growth(shown, metrics, quarterly, years):
             with col:
                 st.plotly_chart(ratio_chart(df, name, formula), config={"displayModeBar": False}, width="stretch",
                                 key=f"ratio_{name}_{show_all}")
-                note = f"Formula: {formula}."
+                note = f"{short(name.split(' (')[0])} Formula: {formula}."
                 derived = set(df["source"]) - {"Reported inputs"}
                 if derived:
                     note += " Some periods: " + "; ".join(sorted(derived)) + "."

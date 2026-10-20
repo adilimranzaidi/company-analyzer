@@ -6,10 +6,10 @@ import streamlit as st
 
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
 from analyzer.filing_text import Passage, filing_passages
-from analyzer.filings import filings_table
+from analyzer.filings import filings_table, latest_reports
 from analyzer.financials import MetricData, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
-from analyzer.peers import Peer, suggest_peers
+from analyzer.peers import Peer, competition_text, suggest_peers
 
 
 def get_secret(name: str) -> str:
@@ -63,8 +63,16 @@ def passages(agent: str, url: str, label: str, form: str) -> list[Passage]:
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
 def peers(agent: str, cik: str, sic_code: str) -> list[Peer]:
+    """Competitors named in the latest 10-K first, then same-industry companies."""
+    competition = ""
     try:
-        return suggest_peers(edgar_client(agent), cik, sic_code, limit=6)
+        annual = latest_reports(filings(agent, cik)).annual
+        if annual:
+            competition = competition_text(passages(agent, annual["url"], "10-K", annual["form"]))
+    except EdgarError:
+        pass                      # no 10-K text: industry-code peers only
+    try:
+        return suggest_peers(edgar_client(agent), cik, sic_code, limit=6, competition=competition)
     except EdgarError:
         return []
 

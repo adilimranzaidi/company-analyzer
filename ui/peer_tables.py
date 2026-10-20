@@ -6,6 +6,7 @@ import streamlit as st
 from analyzer.charts import format_pct, format_ratio, format_value
 from analyzer.compare import growth_series, snapshot
 from analyzer.financials import MetricData
+from analyzer.glossary import short
 from analyzer.metrics import margin_tables, roe_annual
 from ui import data
 
@@ -64,3 +65,14 @@ def series_for(choice: str, metrics: dict[str, MetricData]) -> pd.DataFrame:
 
 def snapshots(loaded: dict[str, tuple]) -> dict[str, dict]:
     return {label: snapshot(m) for label, (_, m) in loaded.items()}
+
+
+def column_help() -> dict:
+    """Hover explanations for the snapshot table's columns."""
+    return {
+        "Revenue growth": st.column_config.TextColumn(help=short("Year-over-year growth")),
+        "Net margin": st.column_config.TextColumn(help=short("Net margin")),
+        "Return on equity": st.column_config.TextColumn(help=short("Return on equity")),
+        "EPS growth": st.column_config.TextColumn(help=short("Diluted EPS")),
+        "Fiscal year": st.column_config.TextColumn(help=short("Fiscal year")),
+    }

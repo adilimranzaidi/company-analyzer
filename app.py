@@ -8,6 +8,7 @@ import streamlit as st
 
 from analyzer.edgar_client import EdgarError, pretty_company_name
 from ui import ask, compare, data, filings, headlines, industry, overview, style, trends
+from ui.terms import glossary_panel
 
 st.set_page_config(page_title="Company Analyzer", page_icon="📊", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -51,8 +52,10 @@ def _on_search() -> None:
         st.session_state.section = "Overview"
 
 
-title_col, search_col = st.columns([1, 2], vertical_alignment="bottom")
+title_col, search_col, glossary_col = st.columns([1, 2, 0.45], vertical_alignment="bottom")
 title_col.markdown('<p class="ca-brand">Company Analyzer</p>', unsafe_allow_html=True)
+with glossary_col.popover("Glossary", width="stretch"):
+    glossary_panel()
 search_col.selectbox(
     "Search", labels, index=labels.index(current_label) if current_label in labels else None,
     key="search", on_change=_on_search, label_visibility="collapsed",
