@@ -453,3 +453,26 @@ free plan (approximately 50 requests an hour, 1,000 a day, 500 symbols a month).
   zero. Real prices never behave like that; the test data now has a slightly different
   market path.
 - **Not yet tested with real prices**: waiting for a Tiingo token.
+
+**Tested with real prices (after the Tiingo token was added)**
+- Five years of daily prices for each stock and SPY loaded correctly.
+- Checked against a known event: Boeing fell 8.0% on January 8, 2024, the first trading
+  day after the Alaska Airlines door-plug incident, and it's flagged (plus the follow-on
+  moves that month).
+
+**What we changed after seeing real results**
+- **From simple excess return to the "market model".** Apple rose 15.3% on April 9, 2025
+  (the tariff-pause rally) while SPY rose 10.5%, and was flagged as company news, but
+  Apple normally moves more than the market. Now each stock's **beta** is estimated from
+  its own history and a move is judged against beta × the market's move. Apple's April
+  2025 day is no longer flagged. Betas found: AXP 1.13, AAPL 1.17, BA 1.14, SMCI 1.88.
+- **Beta is estimated leaving out the unusual days**, in two passes, as event studies do.
+  A test showed one crash day could pull beta far off.
+- **Earnings days now get their explanation:** for stock moves, every 8-K filed within
+  three days is listed, including routine earnings releases (Apple −7.4% on July 31, 2026
+  and AmEx −4.3% on July 24, 2026 both line up with earnings releases).
+- Clearer wording: "9.3 percentage points below what the market's move would predict".
+- Test data made realistic (a stock = the market's move + its own uncorrelated noise).
+  Earlier made-up data had zero or correlated noise, which isn't how real prices behave.
+- New glossary entry: Beta. 1 new test (122 total): a high-beta stock on a big market day
+  isn't flagged.

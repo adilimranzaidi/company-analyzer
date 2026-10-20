@@ -3,10 +3,12 @@
 How a "big move" is decided (all plain Python math)
 1. Daily return = today's adjusted close ÷ yesterday's − 1. "Adjusted" prices account for
    splits and dividends, so a 4-for-1 split doesn't look like a 75% crash.
-2. Market-adjusted ("excess") return = the stock's return − the market's return that day,
-   using SPY (a fund that tracks the S&P 500). A 6% drop on a day the whole market fell 6%
-   isn't about the company; a 9% drop on a day the market rose is.
-3. A day is flagged when the excess return is more than 4 "typical deviations" from normal
+2. Market-adjusted ("abnormal") return = the stock's return − beta × the market's return
+   that day, using SPY (a fund that tracks the S&P 500). Beta is how strongly the stock
+   usually moves with the market, estimated from its own history (the "market model" used
+   in finance event studies). A 6% drop on a day the whole market fell 6% isn't about the
+   company; a 9% drop on a day the market rose is.
+3. A day is flagged when the abnormal return is more than 4 "typical deviations" from normal
    (median absolute deviation, as in Unusual changes) AND the stock moved at least 4%.
 
 Free-plan limits (approximate): about 50 requests an hour, 1,000 a day and 500 different
@@ -94,7 +96,7 @@ def parse_prices(rows: list[dict]) -> pd.DataFrame:
 def big_moves(stock: pd.DataFrame, market: pd.DataFrame,
               threshold: float = MOVE_THRESHOLD, min_move: float = MIN_MOVE) -> pd.DataFrame:
     """Days the stock moved far more than usual, after allowing for the market's move."""
-    columns = ["date", "return", "market_return", "excess", "typical", "score", "close"]
+    columns = ["date", "return", "market_return", "excess", "typical", "score", "close", "beta"]
     if stock.empty or market.empty:
         return pd.DataFrame(columns=columns)
     s = stock.assign(ret=stock["adj_close"].pct_change())
@@ -102,7 +104,19 @@ def big_moves(stock: pd.DataFrame, market: pd.DataFrame,
     df = s.merge(m, on="date").dropna(subset=["ret", "mret"])
     if len(df) < MIN_HISTORY:
         return pd.DataFrame(columns=columns)
-    df["excess"] = df["ret"] - df["mret"]
+    # The "market model": how strongly this stock usually moves with the market (its beta),
+    # estimated from its own history. Apple's beta is above 1, so on a day the market jumps
+    # 10%, Apple jumping 15% is mostly the market, not Apple news.
+    # Estimated in two passes, leaving out the unusual days themselves (as event studies
+    # do): one extreme day can otherwise pull beta far off.
+    beta = df["ret"].cov(df["mret"]) / df["mret"].var()
+    first = df["ret"] - beta * df["mret"]
+    spread = (first - first.median()).abs().median() * 1.4826
+    if spread > 0:
+        normal = df[(first - first.median()).abs() <= threshold * spread]
+        if len(normal) >= MIN_HISTORY and normal["mret"].var() > 0:
+            beta = normal["ret"].cov(normal["mret"]) / normal["mret"].var()
+    df["excess"] = df["ret"] - beta * df["mret"]
     median = df["excess"].median()
     typical = (df["excess"] - median).abs().median() * 1.4826
     if typical <= 0:
@@ -112,7 +126,7 @@ def big_moves(stock: pd.DataFrame, market: pd.DataFrame,
     out = pd.DataFrame({"date": flagged["date"], "return": flagged["ret"],
                         "market_return": flagged["mret"], "excess": flagged["excess"],
                         "typical": typical, "score": flagged["score"],
-                        "close": flagged["close"]}, columns=columns)
+                        "close": flagged["close"], "beta": beta}, columns=columns)
     return out.sort_values("date", ascending=False).reset_index(drop=True)
 
 
@@ -122,8 +136,12 @@ def describe_move(row, ticker: str) -> tuple[str, str, str]:
     title = f"Stock {direction} {abs(row['return']) * 100:.1f}% in one day"
     severity = "high" if abs(row["excess"]) >= 0.10 else "medium"
     market = row["market_return"] * 100
+    beta = row.get("beta", 1.0) if hasattr(row, "get") else 1.0
     explanation = (f"{ticker} {direction} {abs(row['return']) * 100:.1f}% while the S&P 500 "
-                   f"(SPY) {'rose' if market >= 0 else 'fell'} {abs(market):.1f}%. On a typical "
-                   f"day, {ticker} moves about {row['typical'] * 100:.1f}% differently from the "
-                   f"market. Closing price: ${row['close']:,.2f}.")
+                   f"(SPY) {'rose' if market >= 0 else 'fell'} {abs(market):.1f}%. Given how "
+                   f"{ticker} usually moves with the market (beta {beta:.2f}), that's "
+                   f"{abs(row['excess']) * 100:.1f} percentage points "
+                   f"{'above' if row['excess'] > 0 else 'below'} what the market's move would "
+                   f"predict; on a typical day the gap is about "
+                   f"{row['typical'] * 100:.1f}%. Closing price: ${row['close']:,.2f}.")
     return title, severity, explanation

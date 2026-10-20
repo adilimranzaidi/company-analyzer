@@ -151,13 +151,17 @@ def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
     Each stock move lists any 8-K filed within three days, as a likely explanation."""
     filed = events(agent, cik)
     moves, note = price_moves(ticker)
+    # For explaining stock moves, every 8-K counts, including routine earnings releases:
+    # many of the biggest one-day moves happen on earnings day.
+    table = filings(agent, cik)
+    eight_ks = table[table["form"].isin(["8-K", "8-K/A"])]
     combined = list(filed)
     for _, row in moves.iterrows():
         title, severity, explanation = describe_move(row, ticker)
-        nearby = [e for e in filed if abs((e.date - row["date"]).days) <= 3]
-        if nearby:
-            explanation += " Around the same days: " + "; ".join(
-                f"{e.title} ({e.date:%b %d})" for e in nearby) + "."
+        nearby = eight_ks[eight_ks["filed"].apply(lambda d: abs((d - row["date"]).days) <= 3)]
+        if not nearby.empty:
+            explanation += " 8-Ks filed within three days: " + "; ".join(
+                f"{r['about'] or r['form']} ({r['filed']:%b %d})" for _, r in nearby.iterrows()) + "."
         combined.append(Event(row["date"], "Stock move", title, severity, explanation, "",
                               "Price data"))
     return sorted(combined, key=lambda e: e.date, reverse=True), note

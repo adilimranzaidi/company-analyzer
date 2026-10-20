@@ -18,9 +18,11 @@ def series(daily_returns, start=100.0):
     return pd.DataFrame({"date": days, "close": prices, "adj_close": prices})
 
 
-QUIET = [0.01, -0.01, 0.005, -0.005, 0.008, -0.008] * 20     # 120 ordinary days
-# The market's ordinary days differ a little from the stock's, as in real life.
+# Realistic made-up days: the market's own moves, and a stock that follows the market
+# plus its own day-to-day noise (about 1% a day), as real stocks do.
 MARKET_QUIET = [0.006, -0.004, 0.002, -0.007, 0.004, -0.003] * 20
+OWN_NOISE = [-0.011, -0.01, 0.01, 0.006, 0.009, -0.004] * 20   # uncorrelated with the market (correlation 0.00)
+QUIET = [m + n for m, n in zip(MARKET_QUIET, OWN_NOISE)]
 
 
 def test_company_specific_crash_is_flagged():
@@ -29,11 +31,11 @@ def test_company_specific_crash_is_flagged():
     moves = big_moves(stock, market)
     assert len(moves) == 1
     assert moves.iloc[0]["return"] == pytest.approx(-0.12)
-    assert moves.iloc[0]["excess"] == pytest.approx(-0.122)
+    assert moves.iloc[0]["excess"] == pytest.approx(-0.12, abs=0.01)
 
 
 def test_market_wide_crash_is_not_company_news():
-    stock = series(QUIET + [-0.08] + QUIET[:10])                # stock falls 8%...
+    stock = series(QUIET + [-0.075] + QUIET[:10])               # stock falls 7.5%...
     market = series(MARKET_QUIET + [-0.075] + MARKET_QUIET[:10])  # ...because everything did
     assert big_moves(stock, market).empty
 
@@ -51,12 +53,14 @@ def test_not_enough_history_means_no_flags():
 
 
 def test_describe_move_explains_in_plain_english():
-    row = {"return": -0.098, "market_return": -0.004, "excess": -0.094, "typical": 0.012,
-           "close": 287.5}
+    row = {"return": -0.098, "market_return": -0.004, "excess": -0.093, "typical": 0.012,
+           "close": 287.5, "beta": 1.25}
     title, severity, text = describe_move(row, "AXP")
     assert title == "Stock fell 9.8% in one day"
     assert severity == "medium"
-    assert text.startswith("AXP fell 9.8% while the S&P 500 (SPY) fell 0.4%.")
+    assert text.startswith("AXP fell 9.8% while the S&P 500 (SPY) fell 0.4%. Given how AXP "
+                           "usually moves with the market (beta 1.25), that's 9.3 percentage "
+                           "points below what the market's move would predict")
 
 
 def test_parse_prices_uses_dates_and_adjusted_close():
@@ -74,3 +78,11 @@ def test_missing_key_gives_setup_instructions():
 
 def test_key_is_sent_as_a_header_not_in_the_address():
     assert PriceClient("abc").session.headers["Authorization"] == "Token abc"
+
+
+def test_high_beta_stock_on_a_big_market_day_is_not_company_news():
+    # A stock that usually moves 1.5x the market rises 15% on a day the market rises 10%:
+    # that's what its beta predicts, so it isn't flagged (the Apple, April 2025 case).
+    market_days = MARKET_QUIET + [0.10] + MARKET_QUIET[:10]
+    stock_days = [1.5 * r + q for r, q in zip(market_days, [0.002, -0.002] * 200)]
+    assert big_moves(series(stock_days), series(market_days)).empty

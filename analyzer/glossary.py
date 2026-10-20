@@ -142,10 +142,18 @@ GLOSSARY: dict[str, dict[str, str]] = {
     # --- Reporting concepts ----------------------------------------------------------------
     "Market-adjusted return": {
         "short": "A stock's daily move minus the overall market's move that day.",
-        "long": "Also called excess return. If a stock fell 9% on a day the S&P 500 rose 1%, "
-                "its market-adjusted return was about -10%: a sign of company-specific news. "
-                "The dashboard flags days when this is far outside the stock's normal range "
-                "and the stock moved at least 4%.",
+        "long": "Also called abnormal return: the part of a day's move the market doesn't "
+                "explain. The dashboard uses the 'market model': it first estimates the "
+                "stock's beta (how strongly it usually moves with the S&P 500), then "
+                "subtracts beta × the market's move. If a stock fell 9% on a day the market "
+                "rose 1%, that's company-specific news. Days are flagged when this is far "
+                "outside the stock's normal range and the stock moved at least 4%.",
+    },
+    "Beta": {
+        "short": "How strongly a stock usually moves with the overall market.",
+        "long": "A beta of 1 means the stock tends to move as much as the market; 1.5 means "
+                "about 1.5 times as much (up or down); below 1 means less. The dashboard "
+                "estimates it from five years of daily prices, leaving out unusual days.",
     },
     "Fiscal year": {
         "short": "The 12-month period a company uses for its accounts.",
