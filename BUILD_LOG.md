@@ -364,3 +364,62 @@ the time on this network. Finnhub looks news up by ticker, so "V" means Visa the
 - **Two test-setup mistakes** (sample text shorter than the 30-word passage minimum; an
   unrealistic table test). Fixed the tests, and the second led to the heading-row fix.
 - 15 new tests (99 total).
+
+---
+
+## Feedback round: costs, glossary, competitors, real notable events (2026-10-20)
+
+**Assistant cost.** Switched the Ask assistant from Claude Opus 5.5 (~13¢ a question) to
+**Claude Haiku 5.5 (~0.4¢)**. The safeguards don't depend on the model: citations are still
+guaranteed to quote the documents, and it still says when the filings don't answer
+(re-tested). Haiku has no server-side fallback, so a declined question shows a message.
+
+**Glossary (free, no AI).** `analyzer/glossary.py` holds ~35 plain-English definitions,
+written once. They appear in a Glossary panel next to the search box (searchable), as
+hover tips on the Overview figures and table columns, and under each chart. A test
+requires every metric and ratio on the dashboard to have an entry.
+
+**Competitors from the 10-K.** SEC industry codes split real competitors apart (AmEx is
+"finance services", Visa and Mastercard "business services", Capital One "national
+banks"). The app now reads the 10-K's Competition section and matches listed companies'
+names: exact, whole word, capitalized. AmEx gets Capital One, Visa, PayPal and Mastercard,
+with the sentence that names them. SEC-code peers fill any remaining slots.
+- What broke: single-word names that are ordinary words. "Principal competitive factors"
+  matched Principal Financial, "Customers are using…" matched Customers Bancorp, "District
+  of Columbia" matched Columbia Financial, and "Application Programming Interface" matched
+  Interface Inc. Fix: single-word names must not start a sentence, must never appear in
+  lower case in the same text, must not follow "of", and a short list of ordinary words is
+  excluded.
+- Many 10-Ks (Apple, JPMorgan) name no competitors; they keep SEC-code peers.
+
+**"Notable events" redefined.** The old list (big changes in the financials) is now
+**"Unusual changes"** in Company trends. **Notable events** are now things that happened,
+from 8-K filings: restatements, bankruptcy, cybersecurity incidents, change of control,
+listing problems, auditor changes, impairments, restructurings, completed acquisitions, and
+senior executive changes. Routine 8-Ks (earnings releases, investor presentations) are left out.
+- Executive changes (item 5.02, which also covers routine pay plans) are confirmed by
+  reading the 8-K's own text, and the sentence is shown as evidence. Rules learned from
+  false alarms: ignore table rows ("Named Executive Officer | Base Salary"), biographies
+  ("previously appointed CEO in 2010"), division roles ("CEO of Intel Products", "PSG Chief
+  Executive Officer"), reporting lines ("Advisor to the CEO"), bylaw text ("elected
+  officers") and cover-page text. A few imperfect detections remain (for example "CEO,
+  Boeing Defense"), which is why the quote is always shown.
+- Found correctly: Boeing (Calhoun stepping down, Ortberg appointed), Intel (Gelsinger's
+  resignation), Disney (CEO and CFO changes), Super Micro (three listing-problem filings
+  in late 2024, during its accounting scandal), AmEx (CFO retirement).
+- Each event in the last year shows "Headlines around that day" (Finnhub).
+- The Ask assistant now also receives the notable events, so it can answer questions like
+  "Has Boeing had any CEO changes recently?" with citations.
+- The section menu's "Headlines" is now **"News and events"** (Notable events | Headlines).
+
+**What else broke**
+- **Stooq** (free stock prices) now demands a "verify you're a browser" check. We won't
+  bypass bot checks, so it's not used. **Finnhub's free plan has no price history**
+  ("You don't have access to this resource"). Stock-move events wait for a free price source.
+- **Scripted edits mangled regex symbols:** `\b` (word boundary) became an invisible
+  control character in several patterns, silently breaking the biography rule. Fixed, and
+  checked that no source file contains control characters. Lesson: write regex-heavy edits
+  from plain text files, not inside other code.
+- **Name clash** in the assistant's "Dashboard figures": two different lists were both
+  called `events`. Renamed.
+- 10 new tests (113 total).

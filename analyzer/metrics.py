@@ -66,7 +66,7 @@ def add_growth(df: pd.DataFrame, quarterly: bool) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Unusual changes ("notable events")
+# Unusual changes (big moves in the financials, judged against the company's own history)
 # ---------------------------------------------------------------------------
 
 # Defaults, explained:
@@ -248,10 +248,10 @@ def roe_trailing(net_income_q: pd.DataFrame, equity_q: pd.DataFrame) -> pd.DataF
 
 
 # ---------------------------------------------------------------------------
-# Notable events: all unusual changes across metrics, newest first
+# All unusual changes across metrics, newest first
 # ---------------------------------------------------------------------------
 
-def notable_events(metrics: dict[str, MetricData], quarterly: bool,
+def unusual_changes(metrics: dict[str, MetricData], quarterly: bool,
                    threshold: float = OUTLIER_THRESHOLD) -> pd.DataFrame:
     rows = []
     for md in metrics.values():

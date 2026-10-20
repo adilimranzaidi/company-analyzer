@@ -1,11 +1,14 @@
 """Loading data for the dashboard, with Streamlit's caching so each download and
 calculation happens once and is reused while the app runs."""
 
+from datetime import date, timedelta
+
 import pandas as pd
 import streamlit as st
 
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
-from analyzer.filing_text import Passage, filing_passages
+from analyzer.events import Event, build_events
+from analyzer.filing_text import Passage, filing_lines, filing_passages
 from analyzer.filings import filings_table, latest_reports
 from analyzer.financials import MetricData, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
@@ -102,3 +105,28 @@ def headlines(tickers: tuple[str, ...], days: int) -> tuple[list[dict], str, flo
         return merge_articles(groups, limit=40), "", oldest
     except NewsError as err:
         return [], str(err), None
+
+
+EVENT_YEARS = 5   # how far back notable events go
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def events(agent: str, cik: str) -> list[Event]:
+    """Notable events from the company's 8-Ks over the last few years."""
+    since = date.today() - timedelta(days=round(365.25 * EVENT_YEARS))
+    client = edgar_client(agent)
+    return build_events(filings(agent, cik), lambda url: filing_lines(client.download_text, url),
+                        since)
+
+
+def event_headlines(ticker: str, day: date) -> tuple[list[dict], str]:
+    """Headlines from the day before to two days after an event. Finnhub's free plan keeps
+    about a year of news, so older events return nothing (said plainly on the page)."""
+    key = get_secret("FINNHUB_API_KEY")
+    if not key:
+        return [], "Add a Finnhub key to see headlines from that day."
+    try:
+        return news_client(key).news_between(ticker, day - timedelta(days=1),
+                                             day + timedelta(days=2)), ""
+    except NewsError as err:
+        return [], str(err)

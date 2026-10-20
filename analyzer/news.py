@@ -93,6 +93,18 @@ class NewsClient:
         cache_file.write_text(json.dumps(_to_cache(articles)), encoding="utf-8")
         return NewsResult(articles)
 
+    def news_between(self, ticker: str, start: date, end: date) -> list[dict]:
+        """Headlines for a fixed date range (e.g. the days around an event). Saved for a
+        day; news about past dates rarely changes."""
+        key = hashlib.sha1(f"{ticker}|{start}|{end}".encode()).hexdigest()[:16]
+        cache_file = self.cache_dir / f"finnhub_range_{key}.json"
+        if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < 24 * 3600:
+            return _from_cache(json.loads(cache_file.read_text(encoding="utf-8")))
+        articles = self._fetch(ticker, start, end)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(_to_cache(articles)), encoding="utf-8")
+        return articles
+
     def _fetch(self, ticker: str, start: date, end: date) -> list[dict]:
         try:
             response = self.session.get(FINNHUB_NEWS_URL, timeout=30, params={

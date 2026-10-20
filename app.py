@@ -7,14 +7,15 @@ Each section is drawn by a file in ui/, and all data and math live in analyzer/.
 import streamlit as st
 
 from analyzer.edgar_client import EdgarError, pretty_company_name
-from ui import ask, compare, data, filings, headlines, industry, overview, style, trends
+from ui import ask, compare, data, filings, industry, news_events, overview, style, trends
 from ui.terms import glossary_panel
 
 st.set_page_config(page_title="Company Analyzer", page_icon="📊", layout="wide",
                    initial_sidebar_state="collapsed")
 style.apply()
 
-SECTIONS = ["Overview", "Company trends", "Industry", "Compare", "Headlines", "Filings", "Ask"]
+SECTIONS = ["Overview", "Company trends", "Industry", "Compare", "News and events", "Filings",
+            "Ask"]
 
 agent = data.user_agent()
 if "@" not in agent:
@@ -94,8 +95,8 @@ elif section == "Industry":
     industry.render(company, metrics, options)
 elif section == "Compare":
     compare.render(company, options)
-elif section == "Headlines":
-    headlines.render(company)
+elif section == "News and events":
+    news_events.render(company)
 elif section == "Filings":
     filings.render(company)
 else:

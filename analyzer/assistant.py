@@ -19,7 +19,7 @@ from analyzer.compare import snapshot, trailing_roe_latest
 from analyzer.edgar_client import Company, pretty_company_name
 from analyzer.filing_text import Passage
 from analyzer.financials import MetricData
-from analyzer.metrics import add_growth, notable_events
+from analyzer.metrics import add_growth, unusual_changes
 
 # Claude Haiku 5.5: the smallest current Claude model, chosen to keep questions to a
 # fraction of a cent (Opus 5.5 was ~13 cents a question). The accuracy safeguards don't
@@ -64,7 +64,7 @@ For lenders that do not tag total revenue, revenue is calculated as net interest
 Year-over-year growth compares a period with the same fiscal period a year earlier: (this period minus a year earlier) divided by a year earlier. Growth is shown as n/m (not meaningful) when the earlier figure is zero, negative or missing.
 Margins divide a profit measure by revenue for the same period: gross margin uses gross profit, operating margin uses operating income, and net margin uses net income.
 Return on equity (annual) is fiscal-year net income divided by the average of shareholders' equity at the start and end of the year. Return on equity in the quarterly view uses the last four quarters' net income divided by the average of equity now and four quarters earlier.
-Notable events flag a period when its year-over-year change is far from the company's typical change for that metric: more than three typical deviations from the median change (using the median absolute deviation, which extreme years do not distort) and at least 10 percentage points away. Sensitivity can be set to high (2.5), medium (3) or low (4).
+Unusual changes flag a period when its year-over-year change is far from the company's typical change for that metric: more than three typical deviations from the median change (using the median absolute deviation, which extreme years do not distort) and at least 10 percentage points away. Sensitivity can be set to high (2.5), medium (3) or low (4).
 Industry peers are suggested from companies sharing the SEC industry (SIC) code, limited to listed companies and ranked by total assets; the user can edit the list. Industry figures use the median of the peers.
 Headlines come from Finnhub, matched by stock ticker, and are not checked by the dashboard."""
 
@@ -73,7 +73,8 @@ Headlines come from Finnhub, matched by stock ticker, and are not checked by the
 # The "Dashboard figures" document (numbers from our Python code, as sentences)
 # ---------------------------------------------------------------------------
 
-def dashboard_figures(company: Company, metrics: dict[str, MetricData]) -> str:
+def dashboard_figures(company: Company, metrics: dict[str, MetricData],
+                      events: list | None = None) -> str:
     name = pretty_company_name(company.name)
     lines = [f"Dashboard figures for {name} ({company.ticker}), calculated by Company Analyzer's "
              "Python code from the company's SEC filings. Amounts are in US dollars."]
@@ -102,15 +103,20 @@ def dashboard_figures(company: Company, metrics: dict[str, MetricData]) -> str:
     if roe is not None:
         lines.append(f"Return on equity over the four quarters ending {roe['period']} was "
                      f"{format_ratio(roe['value'])}.")
-    events = notable_events(metrics, quarterly=True)
-    if not events.empty:
-        lines.append("Notable events (quarters whose year-over-year change was unusual for this "
+    changes = unusual_changes(metrics, quarterly=True)
+    if not changes.empty:
+        lines.append("Unusual changes (quarters whose year-over-year change was unusual for this "
                      "company), most recent first:")
-        for _, e in events.head(10).iterrows():
+        for _, e in changes.head(10).iterrows():
             lines.append(f"{e['metric']} in {e['period']}: {format_value(e['value'], e['unit'])}, "
                          f"{format_pct(e['yoy_growth'])} versus a year earlier; the typical change "
                          f"is {format_pct(e['typical_growth'])}. First reported in the "
                          f"{e['orig_form']} filed {e['orig_filed']}.")
+    if events:
+        lines.append("Notable events from the company's 8-K filings, most recent first:")
+        for e in events[:15]:
+            detail = f" The 8-K says: {e.evidence}" if e.evidence else ""
+            lines.append(f"On {e.date}, an 8-K reported: {e.title}.{detail}")
     return "\n".join(lines)
 
 

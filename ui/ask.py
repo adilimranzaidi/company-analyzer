@@ -125,7 +125,9 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         with st.spinner("Thinking (usually 5 to 15 seconds)..."):
             try:
                 answer = ask(api_key, company, question, relevant,
-                             dashboard_figures(company, metrics), previous)
+                             dashboard_figures(company, metrics,
+                                               data.events(data.user_agent(), company.cik)),
+                             previous)
             except Exception as err:            # shown to the user, never a crash
                 st.error(friendly_error(err))
                 return

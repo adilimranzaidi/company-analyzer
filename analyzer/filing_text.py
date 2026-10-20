@@ -129,15 +129,19 @@ def split_passages(lines: list[str], filing: str, url: str, form: str = "",
     return passages
 
 
-def filing_passages(download_text, url: str, filing: str, form: str = "") -> list[Passage]:
-    """Passages for one filing. `download_text(url) -> str` fetches the HTML; the cleaned
-    text is saved so each filing is downloaded and parsed only once."""
+def filing_lines(download_text, url: str) -> list[str]:
+    """A filing's cleaned text lines. `download_text(url) -> str` fetches the HTML; the
+    cleaned text is saved so each filing is downloaded and parsed only once."""
     key = hashlib.sha1(url.encode()).hexdigest()[:16]
     cache_file = CACHE_DIR / f"{key}.txt"
     if cache_file.exists():
-        lines = cache_file.read_text(encoding="utf-8").splitlines()
-    else:
-        lines = html_to_lines(download_text(url))
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text("\n".join(lines), encoding="utf-8")
-    return split_passages(lines, filing, url, form)
+        return cache_file.read_text(encoding="utf-8").splitlines()
+    lines = html_to_lines(download_text(url))
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text("\n".join(lines), encoding="utf-8")
+    return lines
+
+
+def filing_passages(download_text, url: str, filing: str, form: str = "") -> list[Passage]:
+    """Passages for one filing (see filing_lines for downloading and caching)."""
+    return split_passages(filing_lines(download_text, url), filing, url, form)

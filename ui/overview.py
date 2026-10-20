@@ -1,4 +1,4 @@
-"""Overview: the calm landing page. A few key figures and recent notable events;
+"""Overview: the calm landing page. A few key figures and the latest notable events;
 charts only when asked for."""
 
 import html
@@ -8,10 +8,10 @@ import streamlit as st
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value
 from analyzer.compare import trailing_roe_latest
 from analyzer.edgar_client import Company
-from analyzer.filings import index_url
 from analyzer.glossary import short
 from analyzer.financials import MetricData
-from analyzer.metrics import add_growth, notable_events
+from analyzer.metrics import add_growth, unusual_changes
+from ui import data
 from ui.style import placeholder
 
 
@@ -19,6 +19,8 @@ def _go_to(section: str, sub: str | None = None) -> None:
     st.session_state["section"] = section
     if sub:
         st.session_state["trends_view"] = sub
+    if section == "News and events":
+        st.session_state["news_view"] = "Notable events"
 
 
 def _figure(md: MetricData | None):
@@ -68,27 +70,35 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     else:
         st.info("No recent quarterly figures are available for this company.")
 
-    # --- Recent notable events ----------------------------------------------
+    # --- Latest notable events (from 8-K filings) ----------------------------
     st.subheader("Latest notable events")
-    events = notable_events(metrics, quarterly=True)
-    if events.empty:
-        st.markdown('<div class="ca-muted">No unusually large changes found.</div>',
-                    unsafe_allow_html=True)
+    with st.spinner("Reading the company's 8-K filings (first time only)..."):
+        events = data.events(data.user_agent(), company.cik)
+    if not events:
+        st.markdown(f'<div class="ca-muted">No notable 8-K events in the last '
+                    f'{data.EVENT_YEARS} years.</div>', unsafe_allow_html=True)
     else:
         rows = []
-        for _, e in events.head(4).iterrows():
-            direction = "up" if (e["yoy_growth"] or 0) >= 0 else "down"
-            change = format_pct(abs(e["yoy_growth"])).lstrip("+")
-            link = index_url(company.cik, e["orig_accn"])
-            rows.append(f'<div class="ca-row"><span>{html.escape(e["metric"])} {direction} '
-                        f'{change} vs. a year earlier</span><span>{e["period"]} · '
-                        f'<a href="{link}" target="_blank">{e["orig_form"]}</a></span></div>')
+        for e in events[:4]:
+            rows.append(f'<div class="ca-row"><span>{html.escape(e.title)}</span>'
+                        f'<span>{e.date:%b %d, %Y} · <a href="{html.escape(e.url, quote=True)}" '
+                        f'target="_blank">{e.form}</a></span></div>')
         st.markdown("".join(rows), unsafe_allow_html=True)
 
-    c1, c2, _ = st.columns([1, 1, 3])
-    c1.button("See all notable events", on_click=_go_to,
-              args=("Company trends", "Notable events"), width="stretch")
-    show = c2.toggle("Show key charts", value=False)
+    changes = unusual_changes(metrics, quarterly=True)
+    if not changes.empty:
+        latest = changes.iloc[0]
+        st.markdown(f'<div class="ca-muted" style="margin-top:0.5rem">Also: {len(changes)} '
+                    f"unusual changes in the financials (latest: {html.escape(latest['metric'])}, "
+                    f"{latest['period']}). See Company trends › Unusual changes.</div>",
+                    unsafe_allow_html=True)
+
+    c1, c2, c3, _ = st.columns([1.1, 1.1, 1, 1.5])
+    c1.button("All notable events", on_click=_go_to, args=("News and events",),
+              width="stretch")
+    c2.button("Unusual changes", on_click=_go_to, args=("Company trends", "Unusual changes"),
+              width="stretch")
+    show = c3.toggle("Show key charts", value=False)
 
     if show:
         cols = st.columns(2)

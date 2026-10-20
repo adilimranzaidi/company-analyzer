@@ -168,8 +168,11 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "Notable event": {
         "short": "Something that happened to the company: an executive change, restatement, deal or big stock move.",
-        "long": "Built from the company's required 8-K filings (with official event types), "
-                "unusually large one-day stock moves, and same-day headlines.",
+        "long": "Built from the 8-K reports a company must file within four business days "
+                "of a major event, using the SEC's official event types (restatements, "
+                "cybersecurity incidents, listing problems, acquisitions, write-downs). "
+                "Executive changes are confirmed from the 8-K's own text, and the sentence "
+                "is shown. Routine 8-Ks such as quarterly earnings releases are left out.",
     },
     "10-K": {
         "short": "A company's annual report to the SEC.",

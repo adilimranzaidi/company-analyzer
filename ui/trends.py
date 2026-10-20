@@ -11,10 +11,10 @@ from analyzer.filings import index_url
 from analyzer.glossary import short
 from ui.terms import explain
 from analyzer.financials import MetricData
-from analyzer.metrics import add_growth, margin_tables, notable_events, roe_annual, roe_trailing
+from analyzer.metrics import add_growth, margin_tables, unusual_changes, roe_annual, roe_trailing
 
 SENSITIVITY = {"High": 2.5, "Medium": 3.0, "Low": 4.0}
-VIEWS = ["Financials", "Growth and margins", "Notable events"]
+VIEWS = ["Financials", "Growth and margins", "Unusual changes"]
 
 
 def _recent(df: pd.DataFrame, years: int) -> pd.DataFrame:
@@ -48,7 +48,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
                 f'{sens.lower()} sensitivity (change in Chart settings)</div>',
                 unsafe_allow_html=True)
 
-    events = notable_events(metrics, quarterly, threshold=threshold)
+    events = unusual_changes(metrics, quarterly, threshold=threshold)
     events = _recent(events, years) if not events.empty else events
     unusual = (events.groupby("metric_key")["period"].apply(set).to_dict()
                if not events.empty else {})

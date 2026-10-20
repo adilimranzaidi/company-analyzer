@@ -81,7 +81,7 @@ def bar_chart(df: pd.DataFrame, title: str, unit: str,
     if not flagged.empty:
         fig.add_scatter(
             x=flagged["period"], y=flagged["value"] / scale, mode="markers",
-            name="Unusual change (see Notable events)",
+            name="Unusual change (see Unusual changes)",
             marker=dict(symbol="diamond", size=11, color=UNUSUAL_COLOR),
             hovertext=[f"<b>{p}</b>: unusual year-over-year change" for p in flagged["period"]],
             hoverinfo="text",
