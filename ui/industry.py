@@ -11,19 +11,26 @@ from analyzer.compare import industry_medians, rank_in_group
 from analyzer.edgar_client import Company
 from analyzer.financials import MetricData
 from ui import data
-from ui.peer_tables import (SERIES_CHOICES, column_help, load_many, series_for, snapshot_row,
-                             snapshots)
+from ui.peer_tables import (
+    SERIES_CHOICES,
+    column_help,
+    load_many,
+    series_for,
+    snapshot_row,
+    snapshots,
+)
 from ui.style import placeholder
 
 
 def render(company: Company, metrics: dict[str, MetricData], options: list[dict]) -> None:
     by_label = {o["label"]: o for o in options}
-    self_label = next((o["label"] for o in options if o["ticker"] == company.ticker), company.ticker)
+    self_label = next((o["label"] for o in options if o["ticker"] == company.ticker),
+                      company.ticker)
 
     with st.spinner("Finding competitors (reading the 10-K the first time)..."):
         suggested = data.peers(data.user_agent(), company.cik, company.sic_code)
     suggested_labels = [f"{p.name} ({p.ticker})" for p in suggested]
-    suggested_labels = [l for l in suggested_labels if l in by_label]
+    suggested_labels = [label for label in suggested_labels if label in by_label]
 
     named = [p for p in suggested if p.source == "Named in the 10-K"]
     by_code = [p for p in suggested if p.source != "Named in the 10-K"]
@@ -99,7 +106,8 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
     median_series = _median_by_period(peer_series)
     series = {company.ticker: company_series.tail(10), "Peer median": median_series.tail(10)}
     st.plotly_chart(multi_line_chart(series, f"{choice}: {company.ticker} vs. peers",
-                                     dashed={"Peer median"}), config={"displayModeBar": False}, width="stretch", key="ind_chart")
+                                     dashed={"Peer median"}),
+                    config={"displayModeBar": False}, width="stretch", key="ind_chart")
     st.caption("By fiscal year (each company's own). The peer median for a year uses every "
                "peer with data for that year, and needs at least two.")
 

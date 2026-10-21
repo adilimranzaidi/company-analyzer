@@ -30,7 +30,8 @@ class Metric:
     key: str
     name: str
     labels: tuple[str, ...]   # EDGAR labels to try; earlier = preferred when tied
-    kind: str                 # "flow" = over a period (income); "instant" = at a date (balance sheet)
+    kind: str                 # "flow" = over a period (income statement);
+                              # "instant" = at a date (balance sheet)
     unit: str = "USD"
     description: str = ""
     derive_q4: bool = True    # can Q4 be calculated as FY - Q1 - Q2 - Q3?
@@ -55,7 +56,8 @@ METRICS: tuple[Metric, ...] = (
         "eps_diluted", "Diluted EPS",
         ("EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted"),
         "flow", unit="USD/shares",
-        description="Net income per share, counting options and other securities that could become shares.",
+        description="Net income per share, counting options and other securities that could "
+                    "become shares.",
         # Per-share figures can't be subtracted: the share count changes each quarter.
         derive_q4=False,
     ),
@@ -85,7 +87,8 @@ METRICS: tuple[Metric, ...] = (
         ("ProvisionForLoanLossesExpensed", "ProvisionForLoanLeaseAndOtherLosses",
          "ProvisionForLoanAndLeaseLosses", "ProvisionForCreditLosses"),
         "flow",
-        description="Money set aside for loans and card balances expected not to be repaid (lenders).",
+        description="Money set aside for loans and card balances expected not to be repaid "
+                    "(lenders).",
     ),
     Metric(
         "total_assets", "Total assets", ("Assets",), "instant",
@@ -100,7 +103,8 @@ METRICS: tuple[Metric, ...] = (
         ("CashAndCashEquivalentsAtCarryingValue",
          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
         "instant",
-        description="Cash and near-cash investments. Some companies only report a figure that includes restricted cash.",
+        description="Cash and near-cash investments. Some companies only report a figure that "
+                    "includes restricted cash.",
     ),
 )
 
@@ -118,7 +122,8 @@ class MetricData:
     choice: LabelChoice | None
     annual: pd.DataFrame
     quarterly: pd.DataFrame
-    discontinued: bool = False   # data exists but stopped long ago (e.g. AmEx operating income, 2010)
+    discontinued: bool = False   # data exists but stopped long ago
+                                 # (e.g. AmEx operating income, 2010)
     note: str = ""               # shown to the user, e.g. why quarterly figures are hidden
 
     @property
@@ -239,7 +244,8 @@ def _finish(df: pd.DataFrame, is_annual: bool) -> pd.DataFrame:
     if is_annual:
         df["period"] = "FY" + df["fiscal_year"].astype(str)
     else:
-        df["period"] = "Q" + df["fiscal_quarter"].astype(str) + " FY" + df["fiscal_year"].astype(str)
+        df["period"] = ("Q" + df["fiscal_quarter"].astype(str)
+                        + " FY" + df["fiscal_year"].astype(str))
     return df[COLUMNS].sort_values("end").reset_index(drop=True)
 
 
@@ -286,7 +292,9 @@ def detect_splits(df: pd.DataFrame) -> list[Split]:
     period_cols = ["start", "end"] if "start" in df else ["end"]
     for _, group in df.groupby(period_cols):
         group = group.sort_values("filed")
-        for older, newer in zip(group.to_dict("records"), group.to_dict("records")[1:]):
+        records = group.to_dict("records")
+        # Each filing paired with the next one (the second list is one shorter on purpose).
+        for older, newer in zip(records, records[1:], strict=False):
             if older["filed"] == newer["filed"] or not older["value"] or not newer["value"]:
                 continue
             factor = _as_split_ratio(older["value"] / newer["value"])
@@ -306,7 +314,7 @@ def detect_splits(df: pd.DataFrame) -> list[Split]:
         else:
             splits.append(ev)
             counts.append(1)
-    return [s for s, n in zip(splits, counts) if n >= SPLIT_MIN_EVIDENCE]
+    return [s for s, n in zip(splits, counts, strict=True) if n >= SPLIT_MIN_EVIDENCE]
 
 
 def adjust_for_splits(df: pd.DataFrame, splits: list[Split]) -> pd.DataFrame:
@@ -455,7 +463,7 @@ def sum_tables(a: pd.DataFrame, b: pd.DataFrame, quarterly: bool, source: str) -
         return _empty()
     m["value"] = m["value"] + m["value_b"]
     m["source"] = [source + (" (uses a derived Q4)" if "Derived" in s1 + s2 else "")
-                   for s1, s2 in zip(m["source"], m["source_b"])]
+                   for s1, s2 in zip(m["source"], m["source_b"], strict=True)]
     return m[COLUMNS].sort_values("end").reset_index(drop=True)
 
 

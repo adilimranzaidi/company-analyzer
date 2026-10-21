@@ -70,7 +70,7 @@ def bar_chart(df: pd.DataFrame, title: str, unit: str,
         hover = [
             f"<b>{p}</b><br>{format_value(v, unit)}<br>{s}<br>From {f} filed {d}"
             for p, v, s, f, d in zip(part["period"], part["value"], part["source"],
-                                     part["form"], part["filed"])
+                                     part["form"], part["filed"], strict=True)
         ]
         fig.add_bar(
             x=part["period"], y=part["value"] / scale, name=name,
@@ -111,7 +111,7 @@ def ratio_chart(df: pd.DataFrame, title: str, formula: str) -> go.Figure:
         f"<b>{p}</b><br>{format_ratio(v)}<br>{formula}: "
         f"{format_value(n, 'USD')} ÷ {format_value(d, 'USD')}<br>{s}"
         for p, v, n, d, s in zip(df["period"], df["value"], df["numerator"],
-                                 df["denominator"], df["source"])
+                                 df["denominator"], df["source"], strict=True)
     ]
     fig = go.Figure(go.Scatter(
         x=df["period"], y=df["value"] * 100, mode="lines+markers",
@@ -149,7 +149,8 @@ def multi_line_chart(series: dict[str, pd.DataFrame], title: str, percent: bool 
             line=dict(color=SERIES_COLORS[i % len(SERIES_COLORS)], width=2,
                       dash="dash" if dashed and name in dashed else "solid"),
             marker=dict(size=8),
-            hovertemplate=f"<b>{name}</b><br>%{{x}}: %{{y:.1f}}{'%' if percent else ''}<extra></extra>",
+            hovertemplate=(f"<b>{name}</b><br>%{{x}}: %{{y:.1f}}{'%' if percent else ''}"
+                           "<extra></extra>"),
         )
     fig.update_layout(
         title=dict(text=title, font=dict(size=17)),

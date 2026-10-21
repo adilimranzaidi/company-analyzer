@@ -14,7 +14,7 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -44,7 +44,7 @@ def parse_articles(items: list[dict], ticker: str = "") -> list[dict]:
             continue
         seen.add(title.lower())
         stamp = a.get("datetime")
-        when = (datetime.fromtimestamp(stamp, tz=timezone.utc).replace(tzinfo=None)
+        when = (datetime.fromtimestamp(stamp, tz=UTC).replace(tzinfo=None)
                 if isinstance(stamp, (int, float)) and stamp > 0 else None)
         articles.append({"title": title, "url": url, "source": a.get("source", ""),
                          "date": when, "ticker": ticker,

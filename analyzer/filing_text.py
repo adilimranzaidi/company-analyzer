@@ -89,7 +89,7 @@ def split_passages(lines: list[str], filing: str, url: str, form: str = "",
         return f"{label} › {heading}" if heading and heading.lower() not in label.lower() else label
 
     def flush():
-        words = sum(len(l.split()) for l in buffer)
+        words = sum(len(line.split()) for line in buffer)
         if words >= MIN_PASSAGE_WORDS:
             passages.append(Passage(filing, section_label(), "\n".join(buffer), url, form,
                                     period))
@@ -109,7 +109,7 @@ def split_passages(lines: list[str], filing: str, url: str, form: str = "",
             heading = ""
             continue
         if _is_heading(line):
-            if sum(len(l.split()) for l in buffer) >= MIN_PASSAGE_WORDS:
+            if sum(len(line.split()) for line in buffer) >= MIN_PASSAGE_WORDS:
                 flush()
             heading = _sentence_case(line)[:60]
             continue
@@ -120,7 +120,7 @@ def split_passages(lines: list[str], filing: str, url: str, form: str = "",
         elif " | " not in line:
             table_header = ""
         buffer.append(line)
-        words = sum(len(l.split()) for l in buffer)
+        words = sum(len(line.split()) for line in buffer)
         # Prefer not to cut a table in half; allow up to 3x the target to finish it. If a
         # table is longer still, the next passage starts by repeating its heading row.
         in_table = " | " in line and i + 1 < len(lines) and " | " in lines[i + 1]

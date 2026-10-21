@@ -8,8 +8,8 @@ import streamlit as st
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value
 from analyzer.compare import trailing_roe_latest
 from analyzer.edgar_client import Company
-from analyzer.glossary import short
 from analyzer.financials import MetricData
+from analyzer.glossary import short
 from analyzer.metrics import add_growth, unusual_changes
 from ui import data
 from ui.style import placeholder
@@ -57,7 +57,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
 
     if tiles:
         cols = st.columns(len(tiles))
-        for col, (label, value, change, p) in zip(cols, tiles):
+        for col, (label, value, change, p) in zip(cols, tiles, strict=True):
             delta = None if change in (None, "n/m") else f"{change} vs. a year ago"
             col.metric(label, value, delta=delta,
                        help=f"{short(label)} ({p}" + (", last 4 quarters" if label ==
@@ -103,7 +103,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
 
     if show:
         cols = st.columns(2)
-        for col, key in zip(cols, ["revenue", "net_income"]):
+        for col, key in zip(cols, ["revenue", "net_income"], strict=True):
             md = metrics.get(key)
             if md and md.available and not md.quarterly.empty:
                 df = md.quarterly.tail(12)

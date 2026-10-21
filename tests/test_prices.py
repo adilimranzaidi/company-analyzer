@@ -21,8 +21,9 @@ def series(daily_returns, start=100.0):
 # Realistic made-up days: the market's own moves, and a stock that follows the market
 # plus its own day-to-day noise (about 1% a day), as real stocks do.
 MARKET_QUIET = [0.006, -0.004, 0.002, -0.007, 0.004, -0.003] * 20
-OWN_NOISE = [-0.011, -0.01, 0.01, 0.006, 0.009, -0.004] * 20   # uncorrelated with the market (correlation 0.00)
-QUIET = [m + n for m, n in zip(MARKET_QUIET, OWN_NOISE)]
+# Uncorrelated with the market (correlation 0.00).
+OWN_NOISE = [-0.011, -0.01, 0.01, 0.006, 0.009, -0.004] * 20
+QUIET = [m + n for m, n in zip(MARKET_QUIET, OWN_NOISE, strict=True)]
 
 
 def test_company_specific_crash_is_flagged():
@@ -84,5 +85,5 @@ def test_high_beta_stock_on_a_big_market_day_is_not_company_news():
     # A stock that usually moves 1.5x the market rises 15% on a day the market rises 10%:
     # that's what its beta predicts, so it isn't flagged (the Apple, April 2025 case).
     market_days = MARKET_QUIET + [0.10] + MARKET_QUIET[:10]
-    stock_days = [1.5 * r + q for r, q in zip(market_days, [0.002, -0.002] * 200)]
+    stock_days = [1.5 * r + q for r, q in zip(market_days, [0.002, -0.002] * 200, strict=False)]
     assert big_moves(series(stock_days), series(market_days)).empty

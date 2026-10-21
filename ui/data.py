@@ -1,6 +1,7 @@
 """Loading data for the dashboard, with Streamlit's caching so each download and
 calculation happens once and is reused while the app runs."""
 
+import threading
 from datetime import date, timedelta
 
 import pandas as pd
@@ -13,8 +14,8 @@ from analyzer.filings import filings_table, latest_reports
 from analyzer.financials import MetricData, fiscal_period, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, competition_text, suggest_peers
-from analyzer.search import FilingSearch
 from analyzer.prices import MARKET, PriceClient, PriceError, big_moves, describe_move
+from analyzer.search import FilingSearch
 
 
 def get_secret(name: str) -> str:
@@ -159,10 +160,12 @@ def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
     combined = list(filed)
     for _, row in moves.iterrows():
         title, severity, explanation = describe_move(row, ticker)
-        nearby = eight_ks[eight_ks["filed"].apply(lambda d: abs((d - row["date"]).days) <= 3)]
+        day = row["date"]
+        nearby = eight_ks[eight_ks["filed"].apply(lambda d, day=day: abs((d - day).days) <= 3)]
         if not nearby.empty:
             explanation += " 8-Ks filed within three days: " + "; ".join(
-                f"{r['about'] or r['form']} ({r['filed']:%b %d})" for _, r in nearby.iterrows()) + "."
+                f"{r['about'] or r['form']} ({r['filed']:%b %d})"
+                for _, r in nearby.iterrows()) + "."
         combined.append(Event(row["date"], "Stock move", title, severity, explanation, "",
                               "Price data"))
     return sorted(combined, key=lambda e: e.date, reverse=True), note
@@ -174,3 +177,24 @@ def filing_search(cik: str, urls: tuple[str, ...], fye_month: int, _passages: li
     of filings. (The leading underscore tells Streamlit not to hash the long passage list;
     the filing addresses identify it.)"""
     return FilingSearch(_passages, lambda d: fiscal_period(d, fye_month), date.today())
+
+
+_prefetching: set[str] = set()
+
+
+def prefetch_filings(agent: str, cik: str, urls: list[str]) -> None:
+    """Start downloading and reading filings in the background, so they're ready by the time
+    a question is asked. Each finished filing is saved to disk; nothing is shown on screen."""
+    if cik in _prefetching:
+        return
+    _prefetching.add(cik)
+    client = edgar_client(agent)
+
+    def work():
+        for url in urls:
+            try:
+                filing_lines(client.download_text, url)      # saved to disk once read
+            except Exception:                                 # a failure here is retried later
+                pass
+
+    threading.Thread(target=work, daemon=True).start()

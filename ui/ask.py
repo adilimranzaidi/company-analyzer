@@ -8,13 +8,15 @@ import streamlit as st
 from analyzer.assistant import Answer, ask, dashboard_figures, friendly_error, search_query
 from analyzer.edgar_client import Company, pretty_company_name
 from analyzer.filings import latest_reports
-from analyzer.financials import MetricData
+from analyzer.financials import MetricData, fiscal_period
+from analyzer.search import RECENT_FILINGS, choose_filings
 from ui import data
 from ui.style import placeholder
 
 MAX_FILINGS = 4
-ALL_FILINGS = "All 10-K and 10-Q filings (recommended)"
-CHOSEN_FILINGS = "Only the filings I choose"
+MATCHING = "Filings that match my question (fastest)"
+EVERYTHING = "Every 10-K and 10-Q (slower the first time)"
+CHOSEN = "Only the filings I choose"
 
 
 def _filing_label(row) -> str:
@@ -26,8 +28,9 @@ def _escape_dollars(text: str) -> str:
     return text.replace("$", "\\$")
 
 
-def _show_answer(answer: Answer) -> None:
-    st.markdown(_escape_dollars(answer.text))
+def _show_answer(answer: Answer, container=None) -> None:
+    box = container or st
+    box.markdown(_escape_dollars(answer.text))
     if answer.sources:
         with st.expander(f"Sources ({len(answer.sources)})"):
             for s in answer.sources:
@@ -58,32 +61,39 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     if reports.empty:
         st.info("No 10-K or 10-Q filings are available for the assistant to read.")
         return
+    rows = reports.to_dict("records")
+    fiscal_of = lambda d: fiscal_period(d, company.fiscal_year_end_month)   # noqa: E731
+
+    # Start reading the most recent filings in the background as soon as Ask opens, so they
+    # are ready by the time the first question is typed.
+    recent = choose_filings(rows, "", fiscal_of)
+    data.prefetch_filings(data.user_agent(), company.cik, [r["url"] for r in recent])
 
     # --- What to search -------------------------------------------------------------------
-    labels = {_filing_label(r): r for _, r in reports.iterrows()}
+    labels = {_filing_label(r): r for r in rows}
     latest = latest_reports(table)
     defaults = [_filing_label(r) for r in (latest.annual, latest.quarterly) if r]
     key = f"ask_filings_{company.ticker}"
     st.session_state.setdefault(key, [d for d in defaults if d in labels])
-    with st.expander(f"What the assistant searches: all {len(reports)} 10-K and 10-Q filings",
-                     expanded=False):
-        mode = st.radio("Search", [ALL_FILINGS, CHOSEN_FILINGS], key="ask_mode",
+    with st.expander("What the assistant searches", expanded=False):
+        mode = st.radio("Search", [MATCHING, EVERYTHING, CHOSEN], key="ask_mode",
                         label_visibility="collapsed")
-        if mode == CHOSEN_FILINGS:
+        if mode == CHOSEN:
             st.multiselect("Filings", list(labels), key=key, max_selections=MAX_FILINGS,
                            label_visibility="collapsed")
-        st.caption("Searching all filings finds older events (for example \"Q2 2023\"); the "
-                   "first question for a company takes a few minutes while its filings are "
-                   "downloaded, then they're saved. Mention a quarter or year in your question "
-                   "to focus on that period. The cost per question is the same either way.")
-    chosen = list(labels) if mode == ALL_FILINGS else st.session_state[key]
+        st.caption(
+            f"Matching: if your question names a year or quarter (\"Q2 FY25\", \"2023\"), the "
+            f"filings for that fiscal year; otherwise the latest {RECENT_FILINGS} filings plus "
+            f"the latest 10-K. Every filing: all {len(rows)} 10-K and 10-Q filings, which takes "
+            "a few minutes the first time for each company. Filings are saved once read. The "
+            "cost per question is the same either way.")
 
     st.markdown(
         f'<div class="ca-muted">Ask about {html.escape(name)} or anything on the dashboard. '
         "Answers come only from the company's filings and the dashboard's own figures, with "
-        "numbered sources; if they don't cover your question, the assistant says so. Uses "
-        "Claude Haiku 5.5: each question costs a fraction of a cent of your Anthropic "
-        "credit. Not investment advice.</div>",
+        "numbered sources; if they don't cover your question, the assistant says so. Tip: name "
+        "the quarter or year you mean. Uses Claude Haiku 5.5: each question costs a fraction "
+        "of a cent of your Anthropic credit. Not investment advice.</div>",
         unsafe_allow_html=True)
 
     # --- Conversation ------------------------------------------------------------------
@@ -109,43 +119,62 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
                 st.session_state["ask_pending"] = q
                 st.rerun()
 
-    question = st.chat_input(f"Ask about {company.ticker}, its filings, or the dashboard") or pending
+    prompt = f"Ask about {company.ticker}, its filings, or the dashboard"
+    question = st.chat_input(prompt) or pending
     if history:
         if st.button("Clear conversation"):
             st.session_state[history_key] = []
             st.rerun()
     if not question:
         return
-    if not chosen:
+
+    previous = [(t["question"], t["answer"].plain_text) for t in history]
+    query = search_query(question, previous)
+    if mode == MATCHING:
+        to_read = choose_filings(rows, query, fiscal_of)
+    elif mode == EVERYTHING:
+        to_read = rows
+    else:
+        to_read = [labels[label] for label in st.session_state[key]]
+    if not to_read:
         st.warning("Choose at least one filing under \"What the assistant searches\".")
         return
 
     with st.chat_message("user"):
         st.markdown(_escape_dollars(question))
     with st.chat_message("assistant"):
-        rows = [labels[label] for label in chosen]
         progress = st.progress(0.0, text="Reading the filings...")
         passages = []
-        for i, row in enumerate(rows):
+        for i, row in enumerate(to_read):
             passages += data.passages(data.user_agent(), row["url"], _filing_label(row),
                                       row["form"], row["period"] or "")
-            progress.progress((i + 1) / len(rows),
-                              text=f"Reading the filings ({i + 1} of {len(rows)}; saved after "
-                                   "the first time)...")
+            progress.progress((i + 1) / len(to_read),
+                              text=f"Reading the filings ({i + 1} of {len(to_read)}; "
+                                   "saved after the first time)...")
         progress.empty()
-        searcher = data.filing_search(company.cik, tuple(r["url"] for r in rows),
+        searcher = data.filing_search(company.cik, tuple(r["url"] for r in to_read),
                                       company.fiscal_year_end_month, passages)
-        previous = [(t["question"], t["answer"].plain_text) for t in history]
-        relevant = searcher.search(search_query(question, previous))
-        with st.spinner("Thinking (usually 5 to 15 seconds)..."):
+        relevant = searcher.search(query)
+
+        # Show the answer's words as they arrive, then replace them with the final version
+        # (which adds the [n] source markers).
+        live = st.empty()
+        written: list[str] = []
+
+        def show_live(chunk: str) -> None:
+            written.append(chunk)
+            live.markdown(_escape_dollars("".join(written)) + " ▌")
+
+        with st.spinner("Thinking..."):
             try:
                 answer = ask(api_key, company, question, relevant,
                              dashboard_figures(company, metrics,
                                                data.all_events(data.user_agent(), company.cik,
                                                                company.ticker)[0]),
-                             previous, searched=searcher.coverage())
+                             previous, searched=searcher.coverage(), on_text=show_live)
             except Exception as err:            # shown to the user, never a crash
+                live.empty()
                 st.error(friendly_error(err))
                 return
-        _show_answer(answer)
+        _show_answer(answer, container=live)
     history.append({"question": question, "answer": answer})

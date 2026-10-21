@@ -25,7 +25,7 @@ from analyzer.metrics import add_growth, unusual_changes
 # fraction of a cent (Opus 5.5 was ~13 cents a question). The accuracy safeguards don't
 # depend on the model: citations are still guaranteed to quote the documents.
 MODEL = "claude-haiku-5-5"
-EFFORT = "high"              # more careful reading; still a fraction of a cent per question
+EFFORT = "medium"            # Haiku's standard level: ~3 seconds faster than "high" (measured)
 MAX_TOKENS = 16000
 HISTORY_TURNS = 4            # earlier questions and answers sent for follow-up context
 # Price per million tokens for Claude Haiku 5.5 (prompts up to 100K tokens), used only to
@@ -47,10 +47,14 @@ say so plainly ("The filings I searched don't address ..."), mention what was se
 rephrasing (for example, naming the quarter or year). Never fill gaps from memory or guess.
 2. Numbers: only state numbers that appear in the documents. Never calculate new figures (no growth rates, \
 ratios, sums, differences or estimates). If a calculation would help, point to the dashboard section that shows it.
-3. General finance concepts (for example, what return on equity means) may be explained from general knowledge. \
+3. Periods: say exactly which period a number covers, as shown in the table's column headings. In 10-Qs, the \
+cash-flow statement and many other tables cover the year to date (for example "six months ended June 30"), \
+not the quarter alone. Never call a year-to-date figure a quarter's figure. If a table passage doesn't show \
+its column headings, say the period isn't shown rather than guessing.
+4. General finance concepts (for example, what return on equity means) may be explained from general knowledge. \
 Start such a sentence with "In general," and keep it separate from claims about {ticker}.
-4. No investment advice, price targets or predictions.
-5. Be concise: answer directly first, then up to five short bullet points if useful."""
+5. No investment advice, price targets or predictions.
+6. Be concise: answer directly first, then up to five short bullet points if useful."""
 
 METHODS_GUIDE = """Company Analyzer: how the dashboard's figures are calculated.
 All financial figures come from companies' XBRL-tagged SEC filings (10-K annual reports and 10-Q quarterly reports and their amendments). Numbers tagged in other documents, such as proxy statements or 8-K press releases, are ignored.
@@ -194,7 +198,7 @@ def parse_answer(content, meta: list[dict]) -> tuple[str, str, list[Source]]:
 
 def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         figures: str, history: list[tuple[str, str]],
-        searched: str = "the filings chosen in the dashboard") -> Answer:
+        searched: str = "the filings chosen in the dashboard", on_text=None) -> Answer:
     client = anthropic.Anthropic(api_key=api_key)
     docs, meta = build_documents(passages, figures)
     messages = []
@@ -202,14 +206,20 @@ def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
     messages.append({"role": "user", "content": docs + [{"type": "text", "text": question}]})
 
-    response = client.messages.create(
+    # Streamed, so the answer's words can be shown as they're written (on_text) instead of
+    # after a 10-second wait; the final message still carries every citation.
+    with client.messages.stream(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT.format(name=pretty_company_name(company.name), ticker=company.ticker,
                                     searched=searched),
         messages=messages,
         output_config={"effort": EFFORT},
-    )
+    ) as stream:
+        for chunk in stream.text_stream:
+            if on_text:
+                on_text(chunk)
+        response = stream.get_final_message()
 
     usage = response.usage
     cost = ((usage.input_tokens + (getattr(usage, "cache_creation_input_tokens", 0) or 0))

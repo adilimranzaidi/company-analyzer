@@ -511,3 +511,53 @@ filings preferred when no date is given, the per-filing cap, and the coverage de
   code files changed underneath it: Streamlit reloads changed modules, and objects already
   cached no longer match the reloaded classes. Fix: `fileWatcherType = "none"` in
   `.streamlit/config.toml` (no live reloading; restart to pick up changes).
+
+---
+
+## Faster, more careful Ask answers, and linting (2026-10-21)
+
+**Reported:** an answer about McDonald's Q2 FY25 cash couldn't explain the jump, and Ask was slow.
+
+**Where the time went (measured):** reading one filing took ~3-4s (plus ~3s to download), and
+the first question read *every* 10-K/10-Q (39 for McDonald's), so it took minutes. Claude's
+answer took ~12s with nothing on screen until the end.
+
+**What we changed**
+- **Only the filings a question needs.** A question naming a period ("Q2 FY25", "2023")
+  reads that fiscal year's filings; otherwise the latest 6 filings plus the latest 10-K.
+  "Every 10-K and 10-Q" and "only the filings I choose" remain as options.
+- **Background pre-loading:** opening Ask starts reading the recent filings straight away.
+- **Streaming:** the answer's words appear as they're written.
+- **Effort "medium"** (Haiku's standard level), measured ~3s faster than "high".
+- Result: questions in an open dashboard take ~7-9s, with words appearing within seconds.
+- **We tried a faster web-page reader (lxml) and removed it:** on these SEC files it was only
+  ~10% faster (2.9s vs 3.1s), not worth an extra dependency. The real cost was reading
+  too many filings.
+
+**Accuracy**
+- New rule for Claude: name the exact period of every number, as the table headings show.
+  10-Q cash-flow statements usually cover the year to date, so a year-to-date figure must
+  never be called a quarter's figure.
+- Correction: I first said the earlier McDonald's answer had mislabelled six-month figures as
+  quarterly. That was wrong. McDonald's cash-flow statement has a separate "Quarters Ended"
+  column, and the figures reconcile ($1,238M → $1,876M, +638). The new answer names the period
+  explicitly and keeps the six-month MD&A figures separate.
+- **Finance-term expansion:** a question about "cash" also searches "cash flows, liquidity,
+  operating/investing/financing activities"; "why" questions favor MD&A and liquidity sections.
+- Why there's no single cause: the 10-Q doesn't say why cash rose. The assistant now
+  assembles it from the cash-flow lines (mostly new long- and short-term borrowing on top of
+  operating cash) and says so.
+
+**Linting** (`ruff`, settings in `ruff.toml`; `requirements-dev.txt`)
+- 107 findings at first; now "All checks passed!".
+- Possible bugs reviewed: 19 places pair lists with `zip()`. Where the lists must line up
+  (15), `strict=True` now raises an error instead of silently dropping data; where lengths
+  differ on purpose (4: consecutive-filing pairs, the last row of a chart grid, one test
+  pattern), `strict=False` with a comment. All tests still pass, so no list was
+  silently mismatched.
+- A "loop variable inside a function" warning (B023) was not a real bug (the function runs
+  immediately), but is now explicit. Removed an unused import and an unused loop counter.
+- Style: variables named `l` renamed, imports moved to the top, long lines wrapped. The
+  instructions sent to Claude stay one sentence per line (exempted in `ruff.toml`, with the reason).
+- Cleaned up two test lines damaged by an earlier escaping mistake.
+- 4 new tests (131 total). All 20 section views checked for AXP and MCD.

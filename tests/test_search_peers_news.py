@@ -6,10 +6,19 @@ from datetime import date, datetime
 import pytest
 
 from analyzer.compare import industry_medians, rank_in_group
-from analyzer.edgar_client import build_search_options, build_ticker_table, \
-    pretty_company_name, primary_ticker_by_cik
+from analyzer.edgar_client import (
+    build_search_options,
+    build_ticker_table,
+    pretty_company_name,
+    primary_ticker_by_cik,
+)
 from analyzer.news import NewsClient, NewsError, merge_articles, parse_articles
-from analyzer.peers import rank_peers, recent_balance_sheet_periods
+from analyzer.peers import (
+    brand_name,
+    find_named_competitors,
+    rank_peers,
+    recent_balance_sheet_periods,
+)
 
 RAW_TICKERS = {
     "0": {"cik_str": 1067983, "ticker": "BRK-B", "title": "BERKSHIRE HATHAWAY INC"},
@@ -115,7 +124,8 @@ def test_parse_articles_dedupes_sorts_and_drops_bad_links():
 def test_merge_articles_combines_tickers_newest_first_without_repeats():
     a = parse_articles([item("Shared story", 1760518800), item("AXP only", 1759320000)], "AXP")
     b = parse_articles([item("Shared story", 1760518800), item("COF only", 1760000000)], "COF")
-    assert [x["title"] for x in merge_articles([a, b], 10)] ==         ["Shared story", "COF only", "AXP only"]
+    titles = [x["title"] for x in merge_articles([a, b], 10)]
+    assert titles == ["Shared story", "COF only", "AXP only"]
 
 
 class FakeResponse:
@@ -150,7 +160,8 @@ def test_rejected_key_gives_a_clear_message(tmp_path):
 
 
 def test_saved_headlines_are_shown_when_finnhub_is_unavailable(tmp_path):
-    import os, time as _time
+    import os
+    import time as _time
     client = client_with(tmp_path, [FakeResponse(200, [item("AmEx news", 1760518800)])])
     client.company_news("AXP", today=date(2026, 10, 17))           # saves to cache
     for f in tmp_path.iterdir():                                   # pretend it's 3 hours old
@@ -163,7 +174,6 @@ def test_saved_headlines_are_shown_when_finnhub_is_unavailable(tmp_path):
 
 # --- Competitors named in the 10-K --------------------------------------------
 
-from analyzer.peers import brand_name, find_named_competitors
 
 COMPETITION = ("Our global card network competes with other card networks, including, among "
                "others, Visa, Mastercard and Discover (owned by Capital One). Principal "

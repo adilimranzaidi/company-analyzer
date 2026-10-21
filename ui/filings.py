@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from analyzer.edgar_client import Company
-from analyzer.filings import filings_table, latest_reports
+from analyzer.filings import latest_reports
 from ui import data
 
 TYPES = {"Annual (10-K)": ("10-K", "10-K/A", "20-F", "40-F"),

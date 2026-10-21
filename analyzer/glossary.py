@@ -20,7 +20,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "owners for the period. A negative figure is a net loss.",
     },
     "Diluted EPS": {
-        "short": "Net income divided by the number of shares, counting shares that could be created from options.",
+        "short": "Net income divided by the number of shares, counting shares that could be "
+                 "created from options.",
         "long": "Earnings per share (EPS) shows how much profit each share earned. 'Diluted' "
                 "assumes stock options and similar securities were turned into shares, which "
                 "gives a slightly lower, more conservative figure. It's the per-share number "
@@ -44,7 +45,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "profitable the main business is on its own.",
     },
     "Net interest income": {
-        "short": "Interest a lender earns on loans minus the interest it pays on deposits and debt.",
+        "short": "Interest a lender earns on loans minus the interest it pays on deposits and "
+                 "debt.",
         "long": "A core profit source for banks and card lenders. For example, AmEx earns "
                 "interest on card balances that customers carry and pays interest to savers "
                 "and lenders. The difference is net interest income.",
@@ -182,7 +184,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "away. It points to something worth investigating, such as COVID in 2020.",
     },
     "Notable event": {
-        "short": "Something that happened to the company: an executive change, restatement, deal or big stock move.",
+        "short": "Something that happened to the company: an executive change, restatement, "
+                 "deal or big stock move.",
         "long": "Built from the 8-K reports a company must file within four business days "
                 "of a major event, using the SEC's official event types (restatements, "
                 "cybersecurity incidents, listing problems, acquisitions, write-downs). "
@@ -208,7 +211,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
                 "official item codes describing the type of event.",
     },
     "MD&A": {
-        "short": "Management's discussion and analysis: the section where management explains results.",
+        "short": "Management's discussion and analysis: the section where management "
+                 "explains results.",
         "long": "Part of every 10-K and 10-Q, written by management: what drove revenue, "
                 "costs and credit quality, and what they expect. It's the best place to find "
                 "out why a number moved.",

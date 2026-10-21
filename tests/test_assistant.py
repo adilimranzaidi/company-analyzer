@@ -1,22 +1,36 @@
 """Checks for the filing reader, passage search, and how answers and citations are
 assembled. None of these call the internet or the Claude API."""
 
+from datetime import date
 from types import SimpleNamespace
 
 from analyzer.assistant import build_documents, parse_answer, search_query
 from analyzer.filing_text import Passage, html_to_lines, split_passages
-from analyzer.search import BM25, tokenize, top_passages
+from analyzer.financials import fiscal_period
+from analyzer.search import (
+    BM25,
+    FilingSearch,
+    choose_filings,
+    expand_query,
+    time_hints,
+    tokenize,
+    top_passages,
+)
 
-FILING_HTML = """
+BUSINESS_TEXT = ("We operate a global payments network. Card members spend on our cards. "
+                 + "More detail about the business. " * 8)
+CREDIT_TEXT = ("Provisions increased due to higher net write-offs and a reserve build. "
+               + "Further discussion of credit trends. " * 8)
+FILING_HTML = f"""
 <html><body>
 <div style="display:none"><ix:header>hidden XBRL data</ix:header></div>
 <p>PART I</p>
 <p>ITEM 1. BUSINESS</p>
-<p>We operate a global payments network. Card members spend on our cards. """ + "More detail about the business. " * 8 + """</p>
+<p>{BUSINESS_TEXT}</p>
 <p>12</p>
 <p>ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION</p>
 <p>PROVISIONS FOR CREDIT LOSSES</p>
-<p>Provisions increased due to higher net write-offs and a reserve build. """ + "Further discussion of credit trends. " * 8 + """</p>
+<p>{CREDIT_TEXT}</p>
 <table><tr><td>Provisions</td><td>$</td><td>1,100</td><td>900</td></tr></table>
 </body></html>
 """
@@ -36,7 +50,8 @@ def test_passages_are_labelled_with_item_and_heading():
     passages = split_passages(lines, "10-K FY2025", "https://sec.gov/x", "10-K")
     sections = [p.section for p in passages]
     assert any(s.startswith("Item 1. Business") for s in sections)
-    assert "Item 7. Management’s discussion and analysis (MD&A) › Provisions for credit losses"         in sections
+    expected = "Item 7. Management’s discussion and analysis (MD&A) › Provisions for credit losses"
+    assert expected in sections
 
 
 def test_part_ii_prefix_only_for_10q():
@@ -126,10 +141,7 @@ def test_tables_are_not_cut_in_half():
 
 # --- Searching all filings, with attention to time -----------------------------
 
-from datetime import date
 
-from analyzer.financials import fiscal_period
-from analyzer.search import FilingSearch, time_hints
 
 
 def test_time_hints_read_quarters_and_years():
@@ -139,7 +151,8 @@ def test_time_hints_read_quarters_and_years():
     assert time_hints("What are the main risks?") == (set(), set())
 
 
-def filing(period, form="10-Q", text="provision for credit losses increased due to a reserve build"):
+def filing(period, form="10-Q",
+           text="provision for credit losses increased due to a reserve build"):
     label = f"{form} for {period}"
     return Passage(label, "Item 2. MD&A", text, f"https://sec.gov/{period}", form, period)
 
@@ -171,3 +184,38 @@ def test_no_single_filing_takes_every_slot():
 def test_coverage_describes_what_was_searched():
     s = searcher([filing("2023-06-30"), filing("2025-12-31", form="10-K")])
     assert s.coverage() == "2 filings (10-K and 10-Q) for periods from 2023-06-30 to 2025-12-31"
+
+
+# --- Choosing which filings to read, and widening finance terms -----------------
+
+
+ROWS = [{"form": "10-Q", "period": p} for p in
+        ["2026-06-30", "2026-03-31", "2025-09-30", "2025-06-30", "2025-03-31",
+         "2024-09-30", "2024-06-30", "2024-03-31", "2023-06-30"]] + \
+       [{"form": "10-K", "period": p} for p in ["2025-12-31", "2024-12-31", "2023-12-31"]]
+FISCAL = lambda d: fiscal_period(d, 12)   # noqa: E731
+
+
+def test_named_year_reads_only_that_years_filings():
+    chosen = choose_filings(ROWS, "why did cash jump in q2fy25", FISCAL)
+    assert {r["period"] for r in chosen} == {"2025-12-31", "2025-09-30", "2025-06-30",
+                                             "2025-03-31"}
+
+
+def test_no_date_reads_recent_filings_and_the_latest_10k():
+    chosen = choose_filings(ROWS, "what are the main risks?", FISCAL)
+    periods = [r["period"] for r in chosen]
+    assert periods[0] == "2026-06-30" and len(chosen) <= 7
+    assert "2025-12-31" in periods                     # latest annual report included
+    assert "2023-06-30" not in periods                 # old filings left out
+
+
+def test_a_year_with_no_filings_falls_back_to_recent_ones():
+    chosen = choose_filings(ROWS, "what happened in 2015?", FISCAL)
+    assert chosen[0]["period"] == "2026-06-30"
+
+
+def test_cash_questions_also_search_cash_flow_words():
+    expanded = expand_query("why did their cash increase?")
+    assert "liquidity" in expanded and "financing" in expanded
+    assert expand_query("what are the risks?") == "what are the risks?"

@@ -91,7 +91,7 @@ def officer_change(lines: list[str]) -> tuple[str, str, str] | None:
     "Named Executive Officer"); biographies are ignored ("previously appointed CEO in
     2010"); the role must be the company's own ("CEO of Intel Products" isn't); and the
     action word must be close to the role."""
-    text = " ".join(l for l in lines if " | " not in l)
+    text = " ".join(line for line in lines if " | " not in line)
     sentences = re.split(r"(?<=[.;])\s+(?=[A-Z])", text)
     found = []
     for sentence in sentences:

@@ -24,7 +24,8 @@ def _event_html(e: Event) -> str:
         evidence = f'<div class="ca-muted">{html.escape(e.evidence)}</div>'
     elif e.evidence:
         evidence = (f'<blockquote>{html.escape(e.evidence)}</blockquote>'
-                    '<div class="ca-muted">Detected from the 8-K\'s own text; check the quote.</div>')
+                    '<div class="ca-muted">Detected from the 8-K\'s own text; '
+                    'check the quote.</div>')
     else:
         evidence = ""
     return (f'<div class="ca-event"><div class="ca-event-date">{e.date:%b %d, %Y}</div>'
@@ -69,7 +70,7 @@ def render(company: Company) -> None:
     chosen = st.multiselect("Types", kinds, default=kinds, key=f"ev_kinds_{company.ticker}")
     shown = [e for e in events if e.category in chosen]
     news_cutoff = date.today() - timedelta(days=365)
-    for i, e in enumerate(shown):
+    for e in shown:
         st.markdown(_event_html(e), unsafe_allow_html=True)
         if e.date >= news_cutoff and data.get_secret("FINNHUB_API_KEY"):
             with st.expander("Headlines around that day"):
@@ -80,7 +81,8 @@ def render(company: Company) -> None:
                     st.caption("No headlines found for those days.")
                 for a in articles[:6]:
                     when = a["date"].strftime("%b %d") if a["date"] else ""
-                    st.markdown(f'<div class="ca-headline"><a href="{html.escape(a["url"], quote=True)}" '
+                    url = html.escape(a["url"], quote=True)
+                    st.markdown(f'<div class="ca-headline"><a href="{url}" '
                                 f'target="_blank">{html.escape(a["title"])}</a>'
                                 f'<div>{html.escape(a["source"])} · {when}</div></div>',
                                 unsafe_allow_html=True)

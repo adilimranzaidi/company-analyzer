@@ -53,15 +53,18 @@ def add_growth(df: pd.DataFrame, quarterly: bool) -> pd.DataFrame:
 
     if quarterly:
         values = {_key(r): r["value"] for _, r in out.iterrows()}
-        out["prior_year_value"] = [values.get((fy - 1, q)) for fy, q in map(_key, out.to_dict("records"))]
-        out["prior_quarter_value"] = [values.get(_previous_quarter(*_key(r))) for r in out.to_dict("records")]
-        out["qoq_growth"] = [growth_rate(c, p) for c, p in zip(out["value"], out["prior_quarter_value"])]
+        records = out.to_dict("records")
+        out["prior_year_value"] = [values.get((fy - 1, q)) for fy, q in map(_key, records)]
+        out["prior_quarter_value"] = [values.get(_previous_quarter(*_key(r))) for r in records]
+        out["qoq_growth"] = [growth_rate(c, p) for c, p in
+                             zip(out["value"], out["prior_quarter_value"], strict=True)]
     else:
         values = {int(r["fiscal_year"]): r["value"] for _, r in out.iterrows()}
         out["prior_year_value"] = [values.get(int(fy) - 1) for fy in out["fiscal_year"]]
         out["prior_quarter_value"] = None
         out["qoq_growth"] = None
-    out["yoy_growth"] = [growth_rate(c, p) for c, p in zip(out["value"], out["prior_year_value"])]
+    out["yoy_growth"] = [growth_rate(c, p) for c, p in
+                         zip(out["value"], out["prior_year_value"], strict=True)]
     return out
 
 
@@ -180,7 +183,8 @@ def calculated_gross_profit(metrics: dict[str, MetricData], quarterly: bool) -> 
     return m[["period", "fiscal_year", "fiscal_quarter", "end", "value", "source"]]
 
 
-def margin_tables(metrics: dict[str, MetricData], quarterly: bool) -> dict[str, tuple[Ratio, pd.DataFrame]]:
+def margin_tables(metrics: dict[str, MetricData],
+                  quarterly: bool) -> dict[str, tuple[Ratio, pd.DataFrame]]:
     """Every margin that can be calculated for this company."""
     def table(key: str) -> pd.DataFrame:
         md = metrics.get(key)
@@ -274,4 +278,5 @@ def unusual_changes(metrics: dict[str, MetricData], quarterly: bool,
             "orig_form", "orig_filed", "orig_accn"]
     if not rows:
         return pd.DataFrame(columns=cols)
-    return pd.DataFrame(rows, columns=cols).sort_values("end", ascending=False).reset_index(drop=True)
+    table = pd.DataFrame(rows, columns=cols).sort_values("end", ascending=False)
+    return table.reset_index(drop=True)

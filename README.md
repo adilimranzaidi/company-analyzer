@@ -68,6 +68,14 @@ streamlit run app.py
 On Windows you can also double-click `start_dashboard.bat`, which starts the dashboard and
 opens it at http://127.0.0.1:8501. Keep its window open while you use the dashboard.
 
+## Checking the code
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest          # automated tests
+ruff check .              # linter (settings in ruff.toml)
+```
+
 ## Project layout
 
 ```

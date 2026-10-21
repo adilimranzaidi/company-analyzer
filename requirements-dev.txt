@@ -1,0 +1,3 @@
+# Tools for development only (not needed to run the dashboard)
+-r requirements.txt
+ruff==0.17.1

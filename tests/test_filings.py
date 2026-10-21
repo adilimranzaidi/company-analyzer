@@ -2,10 +2,10 @@
 
 from analyzer.filings import (
     describe_items,
+    filing_url,
     filings_table,
     index_url,
     is_significant,
-    filing_url,
     latest_reports,
 )
 

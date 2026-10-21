@@ -52,7 +52,7 @@ class BM25:
     def scores(self, query: str) -> list[float]:
         terms = set(tokenize(query))
         result = []
-        for doc, length in zip(self.docs, self.lengths):
+        for doc, length in zip(self.docs, self.lengths, strict=True):
             score = 0.0
             for t in terms:
                 tf = doc.get(t, 0)
@@ -103,7 +103,8 @@ def time_hints(question: str) -> tuple[set[int], set[tuple[int, int]]]:
     """
     text = question.replace("’", "'")
     quarters: set[tuple[int, int]] = set()
-    for q, y in re.findall(r"\bQ([1-4])\s*(?:of\s+)?(?:FY|fiscal\s+)?'?(\d{4}|\d{2})\b", text, re.I):
+    quarter_pattern = r"\bQ([1-4])\s*(?:of\s+)?(?:FY|fiscal\s+)?'?(\d{4}|\d{2})\b"
+    for q, y in re.findall(quarter_pattern, text, re.I):
         quarters.add((_full_year(y), int(q)))
     for word, y in re.findall(r"\b(first|second|third|fourth)\s+quarter\s+(?:of\s+)?(?:fiscal\s+)?"
                               r"(?:year\s+)?(\d{4})\b", text, re.I):
@@ -148,7 +149,7 @@ class FilingSearch:
 
     def search(self, query: str, k: int = 18, per_filing: int = 6) -> list:
         years, quarters = time_hints(query)
-        scores = self.index.scores(query)
+        scores = self.index.scores(expand_query(query))
         # "Why" questions are answered in management's discussion (MD&A), not in the
         # financial-statement tables, so MD&A passages get a modest boost for them.
         asks_why = bool(re.search(r"\b(why|drove|driv|caus|reason|explain|behind)\w*", query, re.I))
@@ -156,7 +157,8 @@ class FilingSearch:
         for i, score in enumerate(scores):
             if score <= 0:
                 continue
-            if asks_why and "MD&A" in self.passages[i].section:
+            section = self.passages[i].section.lower()
+            if asks_why and ("md&a" in section or "liquidity" in section or "cash flow" in section):
                 score *= 1.4
             fiscal = self.fiscal[i]
             if quarters and fiscal in quarters:
@@ -177,7 +179,10 @@ class FilingSearch:
             if len(chosen) >= k:
                 break
         # Newest filing first, and each filing's passages in their original order.
-        chosen.sort(key=lambda i: (-(self.fiscal[i] or (0, 0))[0], -(self.fiscal[i] or (0, 0))[1], i))
+        def newest_first(i):
+            fiscal_year, quarter = self.fiscal[i] or (0, 0)
+            return (-fiscal_year, -quarter, i)
+        chosen.sort(key=newest_first)
         return [self.passages[i] for i in chosen]
 
     def coverage(self) -> str:
@@ -185,3 +190,62 @@ class FilingSearch:
         periods = sorted({p.period for p in self.passages if p.period})
         span = f" for periods from {periods[0]} to {periods[-1]}" if periods else ""
         return f"{len(self.filings)} filings (10-K and 10-Q){span}"
+
+
+# ---------------------------------------------------------------------------
+# Choosing which filings to read for a question (so we don't read all of them)
+# ---------------------------------------------------------------------------
+
+RECENT_FILINGS = 6     # with no date in the question: about the last 18 months
+
+
+def choose_filings(rows: list[dict], question: str, fiscal_period_of) -> list[dict]:
+    """The filings a question needs, newest first.
+
+    rows: [{"form", "period", ...}] for the company's 10-K and 10-Q filings.
+    - A question naming years or quarters gets the filings for those fiscal years.
+    - Otherwise, the most recent filings (the latest 10-K is always included).
+    Reading 4-6 filings instead of every filing makes first answers much faster.
+    """
+    from datetime import date as _date
+
+    def fiscal(row):
+        try:
+            return fiscal_period_of(_date.fromisoformat(row["period"]))
+        except (TypeError, ValueError, KeyError):
+            return None
+
+    rows = sorted(rows, key=lambda r: r.get("period") or "", reverse=True)
+    years, _ = time_hints(question)
+    if years:
+        matched = [r for r in rows if (fiscal(r) or (0, 0))[0] in years]
+        if matched:
+            return matched
+    recent = rows[:RECENT_FILINGS]
+    annual = next((r for r in rows if r.get("form") in {"10-K", "20-F", "40-F"}), None)
+    if annual and annual not in recent:
+        recent.append(annual)
+    return recent
+
+
+# Finance words that appear in questions, and the words filings use for the same idea.
+# A question about "cash" is usually answered in the cash-flow and liquidity discussion.
+EXPANSIONS = {
+    "cash": "cash flows liquidity operating investing financing activities",
+    "debt": "borrowings notes long-term debt financing",
+    "borrow": "borrowings debt financing",
+    "buyback": "repurchases treasury stock share repurchase",
+    "dividend": "dividends paid shareholders",
+    "margin": "gross margin operating margin expenses",
+    "provision": "provision credit losses reserve write-offs",
+    "revenue": "revenues sales net revenues",
+    "sales": "revenues net sales",
+    "profit": "net income earnings",
+    "spend": "expenses spending",
+}
+
+
+def expand_query(query: str) -> str:
+    words = set(tokenize(query))
+    extra = [text for key, text in EXPANSIONS.items() if key in words]
+    return f"{query} {' '.join(extra)}" if extra else query

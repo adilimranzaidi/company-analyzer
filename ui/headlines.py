@@ -37,7 +37,7 @@ def render(company: Company) -> None:
             suggested = data.peers(data.user_agent(), company.cik, company.sic_code)
             tickers = tuple(p.ticker for p in suggested[:5])
         else:
-            tickers = tuple(l.rsplit("(", 1)[-1].rstrip(")") for l in peer_labels[:5])
+            tickers = tuple(label.rsplit("(", 1)[-1].rstrip(")") for label in peer_labels[:5])
         if not tickers:
             st.info("No peers yet. Choose some in the Industry section.")
             return

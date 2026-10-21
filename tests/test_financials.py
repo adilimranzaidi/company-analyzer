@@ -65,7 +65,8 @@ def test_tie_goes_to_the_preferred_label():
 
 
 def test_no_matching_label_returns_none():
-    assert choose_label(facts_with({"SomethingElse": [fact(None, "2025-12-31", 1)]}), REVENUE) is None
+    facts = facts_with({"SomethingElse": [fact(None, "2025-12-31", 1)]})
+    assert choose_label(facts, REVENUE) is None
 
 
 # --- Fiscal quarter labels --------------------------------------------------

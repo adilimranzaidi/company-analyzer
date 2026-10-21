@@ -162,9 +162,9 @@ def split_history():
     rows = []
     quarters = [("2019-01-01", "2019-03-31"), ("2019-04-01", "2019-06-30"),
                 ("2019-07-01", "2019-09-30"), ("2019-10-01", "2019-12-31")]
-    for (s, e), eps in zip(quarters, [4.0, 4.4, 4.8, 5.2]):
+    for (s, e), eps in zip(quarters, [4.0, 4.4, 4.8, 5.2], strict=True):
         rows.append(eps_row(s, e, eps, "2020-01-15"))            # original, pre-split
-    for (s, e), eps in zip(quarters[1:], [4.4, 4.8, 5.2]):
+    for (s, e), eps in zip(quarters[1:], [4.4, 4.8, 5.2], strict=True):
         rows.append(eps_row(s, e, eps / 4, "2020-10-15"))        # restated after split
     return pd.DataFrame(rows)
 

@@ -43,7 +43,8 @@ def test_biographies_divisions_and_reporting_lines_are_not_events():
         "He previously was appointed the Company's President and Chief Executive Officer in 2010.",
         "Ms. Lee will become an Advisor to the CEO on a reduced schedule.",
         "Jane Doe, Chief Executive Officer of Intel Products, will retire next year.",
-        "In connection with her appointment as PSG Chief Executive Officer, an offer letter was signed.",
+        "In connection with her appointment as PSG Chief Executive Officer, an offer letter "
+        "was signed.",
         "Amended the bylaws to enable the Chief Executive Officer to suspend elected officers.",
     ]:
         assert officer_change([sentence]) is None, sentence

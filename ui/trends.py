@@ -8,10 +8,10 @@ import streamlit as st
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value, ratio_chart
 from analyzer.edgar_client import Company
 from analyzer.filings import index_url
-from analyzer.glossary import short
-from ui.terms import explain
 from analyzer.financials import MetricData
-from analyzer.metrics import add_growth, margin_tables, unusual_changes, roe_annual, roe_trailing
+from analyzer.glossary import short
+from analyzer.metrics import add_growth, margin_tables, roe_annual, roe_trailing, unusual_changes
+from ui.terms import explain
 
 SENSITIVITY = {"High": 2.5, "Medium": 3.0, "Low": 4.0}
 VIEWS = ["Financials", "Growth and margins", "Unusual changes"]
@@ -73,7 +73,8 @@ def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, ke
     st.plotly_chart(bar_chart(df, md.metric.name, md.metric.unit,
                               unusual=unusual.get(md.metric.key)),
                     config={"displayModeBar": False}, width="stretch", key=key)
-    st.caption(f"{explain(md.metric.name) or md.metric.description} EDGAR label: `{md.choice.label}`"
+    definition = explain(md.metric.name) or md.metric.description
+    st.caption(f"{definition} EDGAR label: `{md.choice.label}`"
                + (f"  \n{md.note}" if md.note else ""))
     notes = set(df["source"]) - {"Reported"}
     if md.metric.key == "eps_diluted":
@@ -98,7 +99,8 @@ def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, ke
                          "Filing", display_text="Open")})
         if md.choice.passed_over:
             st.markdown("Other EDGAR labels found but not used (less recent data): "
-                        + ", ".join(f"`{l}` (to {e})" for l, e in md.choice.passed_over))
+                        + ", ".join(f"`{label}` (to {end})"
+                                    for label, end in md.choice.passed_over))
 
 
 def _financials(shown, metrics, quarterly, years, unusual, company):
@@ -113,7 +115,7 @@ def _financials(shown, metrics, quarterly, years, unusual, company):
     else:
         for i in range(0, len(shown), 2):
             cols = st.columns(2)
-            for col, md in zip(cols, shown[i:i + 2]):
+            for col, md in zip(cols, shown[i:i + 2], strict=False):   # the last row may have one
                 with col:
                     _metric_chart(md, quarterly, years, unusual, key=f"all_{md.metric.key}",
                                   cik=company.cik)
@@ -187,9 +189,10 @@ def _growth(shown, metrics, quarterly, years):
     selected = charts if show_all else [c for c in charts if c[0] == choice]
     for i in range(0, len(selected), 2 if show_all else 1):
         cols = st.columns(2 if show_all else 1)
-        for col, (name, formula, df) in zip(cols, selected[i:i + 2]):
+        for col, (name, formula, df) in zip(cols, selected[i:i + 2], strict=False):
             with col:
-                st.plotly_chart(ratio_chart(df, name, formula), config={"displayModeBar": False}, width="stretch",
+                st.plotly_chart(ratio_chart(df, name, formula),
+                                config={"displayModeBar": False}, width="stretch",
                                 key=f"ratio_{name}_{show_all}")
                 note = f"{short(name.split(' (')[0])} Formula: {formula}."
                 derived = set(df["source"]) - {"Reported inputs"}
@@ -216,11 +219,13 @@ def _events(events, period, years, sens, cik):
     ev = events[events["metric"].isin(chosen)]
     st.dataframe(pd.DataFrame({
         "Period": ev["period"], "Metric": ev["metric"],
-        "Value": [format_value(v, u) for v, u in zip(ev["value"], ev["unit"])],
-        "A year earlier": [format_value(v, u) for v, u in zip(ev["prior_year_value"], ev["unit"])],
+        "Value": [format_value(v, u) for v, u in zip(ev["value"], ev["unit"], strict=True)],
+        "A year earlier": [format_value(v, u) for v, u in
+                           zip(ev["prior_year_value"], ev["unit"], strict=True)],
         "Change": [format_pct(g) for g in ev["yoy_growth"]],
         "Typical change": [format_pct(g) for g in ev["typical_growth"]],
-        "First reported in": [f"{f} filed {d}" for f, d in zip(ev["orig_form"], ev["orig_filed"])],
+        "First reported in": [f"{f} filed {d}" for f, d in
+                              zip(ev["orig_form"], ev["orig_filed"], strict=True)],
         "Filing": [index_url(cik, a) for a in ev["orig_accn"]],
     }), hide_index=True, width="stretch",
         column_config={"Filing": st.column_config.LinkColumn("Filing", display_text="Open")})

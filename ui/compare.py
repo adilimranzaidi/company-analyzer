@@ -45,7 +45,8 @@ def render(company: Company, options: list[dict]) -> None:
     choice = st.selectbox("Chart", SERIES_CHOICES, key="cmp_measure")
     series = {_short(label): series_for(choice, m).tail(10) for label, (_, m) in loaded.items()}
     empty = [n for n, df in series.items() if df.empty]
-    st.plotly_chart(multi_line_chart(series, choice), config={"displayModeBar": False}, width="stretch", key="cmp_chart")
+    st.plotly_chart(multi_line_chart(series, choice), config={"displayModeBar": False},
+                    width="stretch", key="cmp_chart")
     if empty:
         st.caption(f"Not available for {', '.join(empty)} (not reported, or the figures "
                    "aren't comparable).")
