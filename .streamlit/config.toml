@@ -4,6 +4,9 @@
 # Only this computer can open the dashboard, not other devices on the network.
 address = "localhost"
 port = 8501
+# Don't reload code files while running: a half-reloaded app can fail with "Cannot serialize
+# the return value". Restart the dashboard to pick up code changes.
+fileWatcherType = "none"
 
 [browser]
 # Don't send anonymous usage statistics to Streamlit.

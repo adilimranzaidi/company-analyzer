@@ -507,3 +507,7 @@ point cited, for 0.48¢.
 **Notes:** passages now record their filing's form and period end. 5 new tests (127 total):
 reading quarters and years from questions, the named quarter beating newer filings, recent
 filings preferred when no date is given, the per-filing cap, and the coverage description.
+- **"Cannot serialize the return value (Company)"** appeared in the running dashboard after
+  code files changed underneath it: Streamlit reloads changed modules, and objects already
+  cached no longer match the reloaded classes. Fix: `fileWatcherType = "none"` in
+  `.streamlit/config.toml` (no live reloading; restart to pick up changes).
