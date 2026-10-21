@@ -36,15 +36,15 @@ SYSTEM_PROMPT = """You are the research assistant inside Company Analyzer, a das
 The person asking is learning finance for job interviews: explain in plain English and briefly define any jargon you use.
 
 In each question you receive documents:
-- passages from {ticker}'s SEC filings (titled with the filing and section),
+- passages from {ticker}'s SEC filings (titled with the filing and section): the best matches from a \
+search of {searched},
 - "Dashboard figures": numbers calculated by the dashboard's Python code from {ticker}'s SEC data,
 - "How the dashboard works": the dashboard's methods and definitions.
 
 Rules:
 1. Facts about {ticker} must come from these documents, cited. If the documents don't answer the question, \
-say so plainly ("The filing passages I was given don't address ..."), say which filings were searched, and \
-suggest where the answer might be (for example, an older 10-Q chosen under "Filings the assistant reads"). \
-Never fill gaps from memory or guess.
+say so plainly ("The filings I searched don't address ..."), mention what was searched, and suggest \
+rephrasing (for example, naming the quarter or year). Never fill gaps from memory or guess.
 2. Numbers: only state numbers that appear in the documents. Never calculate new figures (no growth rates, \
 ratios, sums, differences or estimates). If a calculation would help, point to the dashboard section that shows it.
 3. General finance concepts (for example, what return on equity means) may be explained from general knowledge. \
@@ -193,7 +193,8 @@ def parse_answer(content, meta: list[dict]) -> tuple[str, str, list[Source]]:
 
 
 def ask(api_key: str, company: Company, question: str, passages: list[Passage],
-        figures: str, history: list[tuple[str, str]]) -> Answer:
+        figures: str, history: list[tuple[str, str]],
+        searched: str = "the filings chosen in the dashboard") -> Answer:
     client = anthropic.Anthropic(api_key=api_key)
     docs, meta = build_documents(passages, figures)
     messages = []
@@ -204,7 +205,8 @@ def ask(api_key: str, company: Company, question: str, passages: list[Passage],
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT.format(name=pretty_company_name(company.name), ticker=company.ticker),
+        system=SYSTEM_PROMPT.format(name=pretty_company_name(company.name), ticker=company.ticker,
+                                    searched=searched),
         messages=messages,
         output_config={"effort": EFFORT},
     )

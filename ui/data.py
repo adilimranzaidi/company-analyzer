@@ -10,9 +10,10 @@ from analyzer.edgar_client import Company, EdgarClient, EdgarError
 from analyzer.events import Event, build_events
 from analyzer.filing_text import Passage, filing_lines, filing_passages
 from analyzer.filings import filings_table, latest_reports
-from analyzer.financials import MetricData, load_all_metrics
+from analyzer.financials import MetricData, fiscal_period, load_all_metrics
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, competition_text, suggest_peers
+from analyzer.search import FilingSearch
 from analyzer.prices import MARKET, PriceClient, PriceError, big_moves, describe_move
 
 
@@ -60,9 +61,9 @@ def filings(agent: str, cik: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=7 * 24 * 3600, show_spinner=False)
-def passages(agent: str, url: str, label: str, form: str) -> list[Passage]:
+def passages(agent: str, url: str, label: str, form: str, period: str = "") -> list[Passage]:
     """A filing split into labelled passages (filings never change once filed)."""
-    return filing_passages(edgar_client(agent).download_text, url, label, form)
+    return filing_passages(edgar_client(agent).download_text, url, label, form, period)
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
@@ -165,3 +166,11 @@ def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
         combined.append(Event(row["date"], "Stock move", title, severity, explanation, "",
                               "Price data"))
     return sorted(combined, key=lambda e: e.date, reverse=True), note
+
+
+@st.cache_resource(show_spinner=False)
+def filing_search(cik: str, urls: tuple[str, ...], fye_month: int, _passages: list[Passage]):
+    """A search index over all the given filings' passages, built once per company and set
+    of filings. (The leading underscore tells Streamlit not to hash the long passage list;
+    the filing addresses identify it.)"""
+    return FilingSearch(_passages, lambda d: fiscal_period(d, fye_month), date.today())

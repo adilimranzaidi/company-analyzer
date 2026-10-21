@@ -122,3 +122,52 @@ def test_tables_are_not_cut_in_half():
     passages = split_passages(lines, "10-K", "u", "10-K", target_words=60)
     holding_rows = [p for p in passages if "Line item 39" in p.text]
     assert holding_rows and header in holding_rows[0].text      # last row keeps its headings
+
+
+# --- Searching all filings, with attention to time -----------------------------
+
+from datetime import date
+
+from analyzer.financials import fiscal_period
+from analyzer.search import FilingSearch, time_hints
+
+
+def test_time_hints_read_quarters_and_years():
+    assert time_hints("Why did provisions jump in Q2 2023?") == ({2023}, {(2023, 2)})
+    assert time_hints("the second quarter of 2023") == ({2023}, {(2023, 2)})
+    assert time_hints("How did FY2024 compare with 2023?") == ({2023, 2024}, set())
+    assert time_hints("What are the main risks?") == (set(), set())
+
+
+def filing(period, form="10-Q", text="provision for credit losses increased due to a reserve build"):
+    label = f"{form} for {period}"
+    return Passage(label, "Item 2. MD&A", text, f"https://sec.gov/{period}", form, period)
+
+
+def searcher(passages):
+    return FilingSearch(passages, lambda d: fiscal_period(d, 12), today=date(2026, 10, 21))
+
+
+def test_named_quarter_wins_over_newer_filings():
+    passages = [filing("2026-06-30"), filing("2025-06-30"), filing("2023-06-30"),
+                filing("2023-03-31")]
+    best = searcher(passages).search("Why did provision for credit losses jump in Q2 2023?", k=1)
+    assert best[0].period == "2023-06-30"
+
+
+def test_without_a_date_recent_filings_are_preferred():
+    passages = [filing("2021-06-30"), filing("2026-06-30"), filing("2023-06-30")]
+    best = searcher(passages).search("Why did the provision for credit losses change?", k=1)
+    assert best[0].period == "2026-06-30"
+
+
+def test_no_single_filing_takes_every_slot():
+    passages = [filing("2026-06-30") for _ in range(10)] + [filing("2025-06-30")]
+    chosen = searcher(passages).search("provision for credit losses", k=8, per_filing=6)
+    assert sum(p.period == "2026-06-30" for p in chosen) == 6
+    assert any(p.period == "2025-06-30" for p in chosen)
+
+
+def test_coverage_describes_what_was_searched():
+    s = searcher([filing("2023-06-30"), filing("2025-12-31", form="10-K")])
+    assert s.coverage() == "2 filings (10-K and 10-Q) for periods from 2023-06-30 to 2025-12-31"

@@ -31,6 +31,8 @@ class Passage:
     section: str       # e.g. "Item 7. Management's discussion and analysis › Credit quality"
     text: str
     url: str
+    form: str = ""     # "10-K" or "10-Q"
+    period: str = ""   # the filing's period end, e.g. "2023-06-30" (for time-aware search)
 
 
 def html_to_lines(html: str) -> list[str]:
@@ -74,7 +76,7 @@ def _item_title(title: str) -> str:
 
 
 def split_passages(lines: list[str], filing: str, url: str, form: str = "",
-                   target_words: int = PASSAGE_WORDS) -> list[Passage]:
+                   target_words: int = PASSAGE_WORDS, period: str = "") -> list[Passage]:
     passages: list[Passage] = []
     part, item, heading = "", "", ""
     table_header = ""
@@ -89,7 +91,8 @@ def split_passages(lines: list[str], filing: str, url: str, form: str = "",
     def flush():
         words = sum(len(l.split()) for l in buffer)
         if words >= MIN_PASSAGE_WORDS:
-            passages.append(Passage(filing, section_label(), "\n".join(buffer), url))
+            passages.append(Passage(filing, section_label(), "\n".join(buffer), url, form,
+                                    period))
         buffer.clear()
 
     for i, line in enumerate(lines):
@@ -142,6 +145,7 @@ def filing_lines(download_text, url: str) -> list[str]:
     return lines
 
 
-def filing_passages(download_text, url: str, filing: str, form: str = "") -> list[Passage]:
+def filing_passages(download_text, url: str, filing: str, form: str = "",
+                    period: str = "") -> list[Passage]:
     """Passages for one filing (see filing_lines for downloading and caching)."""
-    return split_passages(filing_lines(download_text, url), filing, url, form)
+    return split_passages(filing_lines(download_text, url), filing, url, form, period=period)

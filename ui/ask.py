@@ -9,11 +9,12 @@ from analyzer.assistant import Answer, ask, dashboard_figures, friendly_error, s
 from analyzer.edgar_client import Company, pretty_company_name
 from analyzer.filings import latest_reports
 from analyzer.financials import MetricData
-from analyzer.search import top_passages
 from ui import data
 from ui.style import placeholder
 
 MAX_FILINGS = 4
+ALL_FILINGS = "All 10-K and 10-Q filings (recommended)"
+CHOSEN_FILINGS = "Only the filings I choose"
 
 
 def _filing_label(row) -> str:
@@ -58,22 +59,28 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         st.info("No 10-K or 10-Q filings are available for the assistant to read.")
         return
 
-    # --- Which filings to read ----------------------------------------------------------
+    # --- What to search -------------------------------------------------------------------
     labels = {_filing_label(r): r for _, r in reports.iterrows()}
     latest = latest_reports(table)
     defaults = [_filing_label(r) for r in (latest.annual, latest.quarterly) if r]
     key = f"ask_filings_{company.ticker}"
     st.session_state.setdefault(key, [d for d in defaults if d in labels])
-    with st.expander("Filings the assistant reads", expanded=False):
-        st.multiselect("Filings", list(labels), key=key, max_selections=MAX_FILINGS,
-                       label_visibility="collapsed")
-        st.caption("By default, the latest annual and quarterly reports. Add an older 10-Q "
-                   "or 10-K to ask about earlier periods (up to four at a time).")
-    chosen = st.session_state[key]
+    with st.expander(f"What the assistant searches: all {len(reports)} 10-K and 10-Q filings",
+                     expanded=False):
+        mode = st.radio("Search", [ALL_FILINGS, CHOSEN_FILINGS], key="ask_mode",
+                        label_visibility="collapsed")
+        if mode == CHOSEN_FILINGS:
+            st.multiselect("Filings", list(labels), key=key, max_selections=MAX_FILINGS,
+                           label_visibility="collapsed")
+        st.caption("Searching all filings finds older events (for example \"Q2 2023\"); the "
+                   "first question for a company takes a few minutes while its filings are "
+                   "downloaded, then they're saved. Mention a quarter or year in your question "
+                   "to focus on that period. The cost per question is the same either way.")
+    chosen = list(labels) if mode == ALL_FILINGS else st.session_state[key]
 
     st.markdown(
         f'<div class="ca-muted">Ask about {html.escape(name)} or anything on the dashboard. '
-        "Answers come only from the chosen filings and the dashboard's own figures, with "
+        "Answers come only from the company's filings and the dashboard's own figures, with "
         "numbered sources; if they don't cover your question, the assistant says so. Uses "
         "Claude Haiku 5.5: each question costs a fraction of a cent of your Anthropic "
         "credit. Not investment advice.</div>",
@@ -110,27 +117,33 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     if not question:
         return
     if not chosen:
-        st.warning("Choose at least one filing under \"Filings the assistant reads\".")
+        st.warning("Choose at least one filing under \"What the assistant searches\".")
         return
 
     with st.chat_message("user"):
         st.markdown(_escape_dollars(question))
     with st.chat_message("assistant"):
-        with st.spinner("Reading the filings..."):
-            passages = []
-            for label in chosen:
-                row = labels[label]
-                passages += data.passages(data.user_agent(), row["url"], _filing_label(row),
-                                          row["form"])
+        rows = [labels[label] for label in chosen]
+        progress = st.progress(0.0, text="Reading the filings...")
+        passages = []
+        for i, row in enumerate(rows):
+            passages += data.passages(data.user_agent(), row["url"], _filing_label(row),
+                                      row["form"], row["period"] or "")
+            progress.progress((i + 1) / len(rows),
+                              text=f"Reading the filings ({i + 1} of {len(rows)}; saved after "
+                                   "the first time)...")
+        progress.empty()
+        searcher = data.filing_search(company.cik, tuple(r["url"] for r in rows),
+                                      company.fiscal_year_end_month, passages)
         previous = [(t["question"], t["answer"].plain_text) for t in history]
-        relevant = top_passages(passages, search_query(question, previous))
+        relevant = searcher.search(search_query(question, previous))
         with st.spinner("Thinking (usually 5 to 15 seconds)..."):
             try:
                 answer = ask(api_key, company, question, relevant,
                              dashboard_figures(company, metrics,
                                                data.all_events(data.user_agent(), company.cik,
                                                                company.ticker)[0]),
-                             previous)
+                             previous, searched=searcher.coverage())
             except Exception as err:            # shown to the user, never a crash
                 st.error(friendly_error(err))
                 return

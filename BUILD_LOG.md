@@ -476,3 +476,34 @@ free plan (approximately 50 requests an hour, 1,000 a day, 500 symbols a month).
   Earlier made-up data had zero or correlated noise, which isn't how real prices behave.
 - New glossary entry: Beta. 1 new test (122 total): a high-beta stock on a big market day
   isn't flagged.
+
+---
+
+## Ask searches every 10-K and 10-Q (2026-10-21)
+
+**Reported:** a question about Q2 2023 got "that filing isn't among the passages I was
+given". The assistant only searched the latest 10-K and 10-Q unless filings were added by hand.
+
+**What we did**
+- **All filings, by default.** The Ask section now indexes every 10-K and 10-Q in the SEC's
+  recent list (AmEx: 27 filings, 3,945 passages, periods from December 2019 to June 2026).
+  The first time per company takes a few minutes (about 3 for AmEx) while filings download;
+  the text is saved permanently (filings never change) and later searches take ~0.04s.
+  The cost per question is unchanged, because Claude still receives only the ~18 best passages.
+  "Only the filings I choose" remains as an option.
+- **Time-aware search** (`FilingSearch` in `analyzer/search.py`): a question naming a quarter
+  ("Q2 2023", "second quarter of 2023") boosts that quarter's filing 2.5x and the same
+  fiscal year 1.5x; a named year ("2023", "FY2024") boosts that year 2x; with no date,
+  recent filings get a mild boost. Fiscal years use each company's own year-end.
+- **"Why" questions favor MD&A**, where management explains changes (1.4x).
+- **Variety:** at most 6 passages from any one filing.
+- **Claude is told what was searched** ("27 filings (10-K and 10-Q) for periods from 2019-12-31
+  to 2026-06-30"), so "not found" answers describe the real search and suggest naming a period.
+
+**Result:** "Why did provisions for credit losses jump in Q2 2023?" is now answered from the
+Q2 2023 10-Q's MD&A (higher net write-offs and reserve builds driven by loan growth), every
+point cited, for 0.48¢.
+
+**Notes:** passages now record their filing's form and period end. 5 new tests (127 total):
+reading quarters and years from questions, the named quarter beating newer filings, recent
+filings preferred when no date is given, the per-filing cap, and the coverage description.
