@@ -55,7 +55,7 @@ def _on_search() -> None:
         st.session_state.section = "Overview"
 
 
-title_col, search_col, glossary_col = st.columns([1, 2, 0.45], vertical_alignment="bottom")
+title_col, search_col, glossary_col = st.columns([1, 2, 0.45], vertical_alignment="center")
 title_col.markdown('<p class="ca-brand">Company Analyzer</p>', unsafe_allow_html=True)
 with glossary_col.popover("Glossary", width="stretch"):
     glossary_panel()
@@ -81,13 +81,11 @@ meta = [company.ticker, ", ".join(company.exchanges), company.industry,
 st.markdown(f'<div class="ca-meta">{" · ".join(m for m in meta if m)} · '
             f'<a href="{company.edgar_url}" target="_blank">SEC filings</a></div>',
             unsafe_allow_html=True)
-st.write("")
 
 # --- Section menu -------------------------------------------------------------
 st.session_state.setdefault("section", "Overview")
 section = st.segmented_control("Section", SECTIONS, key="section",
                                label_visibility="collapsed") or "Overview"
-st.divider()
 
 if section == "Overview":
     overview.render(company, metrics)

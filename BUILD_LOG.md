@@ -667,3 +667,38 @@ to see where the time went.
 loading Python's data libraries (pandas, Streamlit, Plotly), once per start. Ask answers
 still take ~7-9s, which is Claude writing the answer.
 - 1 new test (145 total); linter clean.
+
+---
+
+## Design review against Apple's design principles (2026-10-22)
+
+Reviewed with the `apple-design` skill (Apple's WWDC design guidance), on desktop and a
+phone-sized screen. The motion and gesture guidance mostly doesn't apply (the dashboard has
+no dragging or animation), so the fixes come from the hierarchy, typography, feedback and
+flexibility principles.
+
+**Six fixes**
+1. **Most important first (Simplicity):** the Overview opened with three screens of written
+   briefing, pushing the key figures below the fold. Now: key figures, then notable events,
+   then the "Company briefing" at the end.
+2. **Clear heading levels (Typography):** the briefing's headings were the same size as the
+   page's section headings. They're now a smaller, bolder level. Letter-spacing depends on
+   size (tighter on large titles, slightly looser on small labels) instead of one value.
+3. **No mixed-up pages while loading (Response / spatial consistency):** when switching
+   sections, the previous section stayed on screen, faded, under the new one. It's now
+   cleared if the update takes longer than half a second (quick clicks don't flicker).
+   Respects the "reduce motion" setting.
+4. **Header craft:** the app name now lines up with the search box, the top of the page no
+   longer clips on a phone, and the big gap plus heavy divider under the section menu is
+   replaced by a thin line.
+5. **Less noise (Purpose):** saved answers no longer show what they cost (reopening is
+   free); "Also: 54 unusual changes" (a count so high "unusual" lost meaning) became the
+   single latest one; the long explanation on News and events moved into a "What counts as
+   a notable event?" expander.
+6. **Phone layout (Flexibility):** the seven section buttons wrapped into three rows on a
+   phone; they now stay on one line that scrolls sideways.
+
+**What broke / how we fixed it**
+- The first menu style applied to every button group on the site; scoped to the main menu.
+- The shell garbled an apostrophe and a line break in a script again; fixed with the Edit tool.
+- 145 tests pass; linter clean; every section opened without errors (AppTest).

@@ -28,7 +28,8 @@ def _escape_dollars(text: str) -> str:
     return text.replace("$", "\\$")
 
 
-def _show_answer(answer: Answer, container=None) -> None:
+def _show_answer(answer: Answer, container=None, show_cost: bool = True) -> None:
+    """show_cost=False for a saved answer: reopening it is free, so its cost is just noise."""
     box = container or st
     box.markdown(_escape_dollars(answer.text))
     if answer.sources:
@@ -41,6 +42,10 @@ def _show_answer(answer: Answer, container=None) -> None:
                             f'{html.escape(s.title)}{link}<blockquote>{quote}</blockquote></div>',
                             unsafe_allow_html=True)
     extra = f" · {answer.note}" if answer.note else ""
+    if not show_cost:
+        if answer.note:
+            st.caption(answer.note)
+        return
     # Shown in cents: "$0.0045" was easy to misread as 4 cents; it's under half a cent.
     cents = answer.cost * 100
     cost = f"{cents:.2f}¢" if cents < 1 else f"{cents:.1f}¢"

@@ -2,6 +2,7 @@
 charts only when asked for."""
 
 import html
+from dataclasses import replace
 
 import streamlit as st
 
@@ -55,7 +56,9 @@ def _synopsis(company: Company, metrics: dict[str, MetricData]) -> None:
 
     saved = load_saved(key)
     if saved:
-        _show_answer(saved)
+        # The briefing's own headings sit one level below the page's section headings.
+        _show_answer(replace(saved, text=saved.text.replace("### ", "#### ")),
+                     show_cost=False)
         st.caption(f"Written from the {annual['form']} filed {annual['filed']:%b %d, %Y}"
                    + (f" and the {recent['form']} filed {recent['filed']:%b %d, %Y}"
                       if recent is not annual else "")
@@ -96,8 +99,8 @@ def _synopsis(company: Company, metrics: dict[str, MetricData]) -> None:
 
 
 def render(company: Company, metrics: dict[str, MetricData]) -> None:
-    st.subheader("About")
-    _synopsis(company, metrics)
+    # Order: the most important, quickest-to-read things first (figures, events), then the
+    # longer written briefing.
 
     # --- Key figures -------------------------------------------------------
     rev = _figure(metrics.get("revenue"))
@@ -149,10 +152,9 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     changes = unusual_changes(metrics, quarterly=True)
     if not changes.empty:
         latest = changes.iloc[0]
-        st.markdown(f'<div class="ca-muted" style="margin-top:0.5rem">Also: {len(changes)} '
-                    f"unusual changes in the financials (latest: {html.escape(latest['metric'])}, "
-                    f"{latest['period']}). See Company trends › Unusual changes.</div>",
-                    unsafe_allow_html=True)
+        st.markdown(f'<div class="ca-muted" style="margin-top:0.5rem">Latest unusual change '
+                    f"in the financials: {html.escape(latest['metric'])}, {latest['period']}."
+                    "</div>", unsafe_allow_html=True)
 
     c1, c2, c3, _ = st.columns([1.1, 1.1, 1, 1.5])
     c1.button("All notable events", on_click=_go_to, args=("News and events",),
@@ -171,3 +173,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
                                  config={"displayModeBar": False}, width="stretch", key=f"ov_{key}")
         st.markdown('<div class="ca-muted">Last 12 quarters. More in Company trends.</div>',
                     unsafe_allow_html=True)
+
+    # --- Written briefing ------------------------------------------------------
+    st.subheader("Company briefing")
+    _synopsis(company, metrics)

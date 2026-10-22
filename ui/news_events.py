@@ -49,21 +49,21 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         headlines.render(company)
         return
 
-    st.markdown(
-        '<div class="ca-muted">Things that happened to the company, from the 8-K reports it '
-        "must file within four business days of a major event: executive departures and "
-        "appointments, restatements, cybersecurity incidents, listing problems, "
-        "acquisitions, write-downs and restructurings. Routine 8-Ks (quarterly earnings "
-        f"releases, investor presentations) are left out. Last {data.EVENT_YEARS} years.</div>",
-        unsafe_allow_html=True)
+    st.markdown('<div class="ca-muted">Major events from the company’s 8-K reports, and '
+                f"unusually large stock moves. Last {data.EVENT_YEARS} years.</div>",
+                unsafe_allow_html=True)
+    with st.expander("What counts as a notable event?"):
+        st.markdown(
+            "**8-K events:** companies must file an 8-K within four business days of a major "
+            "event: executive departures and appointments, restatements, cybersecurity "
+            "incidents, listing problems, acquisitions, write-downs and restructurings. Routine "
+            "8-Ks (quarterly earnings releases, investor presentations) are left out.\n\n"
+            "**Stock moves:** days the stock moved far more than usual *after allowing for the "
+            "whole market's move that day* (compared with SPY, which tracks the S&P 500), and "
+            "by at least 4%. Prices from Tiingo.")
 
     with st.spinner("Reading 8-K filings and daily prices (first time only)..."):
         events, price_note = data.all_events(data.user_agent(), company.cik, company.ticker)
-    st.markdown(
-        '<div class="ca-muted"><b>Stock moves</b> are days the stock moved far more than usual '
-        "<i>after allowing for the whole market's move that day</i> (compared with SPY, which "
-        "tracks the S&amp;P 500), and by at least 4%. Prices from Tiingo.</div>",
-        unsafe_allow_html=True)
     if price_note:
         setup = (" Sign up free at tiingo.com, then add <code>TIINGO_API_KEY = "
                  "\"your-token\"</code> to <code>.streamlit/secrets.toml</code> and restart "

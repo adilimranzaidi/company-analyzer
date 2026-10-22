@@ -22,7 +22,7 @@ def explain_box(company: Company, metrics: dict[str, MetricData], kind: str, ide
     saved = load_saved(key)
     if saved:
         with st.expander("Explanation (saved, free to reopen)", expanded=False):
-            _show_answer(saved)
+            _show_answer(saved, show_cost=False)
         return
     if not data.get_secret("ANTHROPIC_API_KEY"):
         st.caption("Add an Anthropic API key to get explanations.")
