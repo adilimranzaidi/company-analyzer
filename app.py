@@ -97,7 +97,7 @@ elif section == "Industry":
 elif section == "Compare":
     compare.render(company, options)
 elif section == "News and events":
-    news_events.render(company)
+    news_events.render(company, metrics)
 elif section == "Filings":
     filings.render(company)
 else:

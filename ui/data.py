@@ -198,3 +198,17 @@ def prefetch_filings(agent: str, cik: str, urls: list[str]) -> None:
                 pass
 
     threading.Thread(target=work, daemon=True).start()
+
+
+def filing_row_passages(agent: str, row: dict, label: str) -> list[Passage]:
+    """Passages for one filing; for an 8-K, also its Exhibit 99 attachments (the press
+    release), because the 8-K's main document is often only a short cover note."""
+    out = passages(agent, row["url"], label, row["form"], row.get("period") or "")
+    if str(row["form"]).startswith("8-K"):
+        try:
+            for url in edgar_client(agent).exhibit_urls(row["url"]):
+                out = out + passages(agent, url, f"{label} · Exhibit 99 (press release)",
+                                     row["form"], row.get("period") or "")
+        except EdgarError:
+            pass                       # the main document alone still helps
+    return out

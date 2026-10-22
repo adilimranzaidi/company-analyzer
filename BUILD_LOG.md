@@ -561,3 +561,37 @@ answer took ~12s with nothing on screen until the end.
   instructions sent to Claude stay one sentence per line (exempted in `ruff.toml`, with the reason).
 - Cleaned up two test lines damaged by an earlier escaping mistake.
 - 4 new tests (131 total). All 20 section views checked for AXP and MCD.
+
+---
+
+## Step 5b: Explain from filing (2026-10-22)
+
+**What we did** (`analyzer/explain.py`, `ui/explain_ui.py`)
+- **Company trends › Unusual changes:** choose a change and press "Explain from filing". The
+  assistant reads the 10-Q/10-K that first reported the number (where management discussed
+  it at the time) and gives management's explanation, cited.
+- **News and events › Notable events:** every event has an "Explain this event" button.
+  - 8-K events read that 8-K and the next 10-Q/10-K.
+  - Stock moves read 8-Ks filed within three days, the next 10-Q/10-K, and (for the last
+    year) that day's headlines, which Claude is told to attribute as news, not filings.
+- **Saved answers:** each explanation is saved to `data/cache/explanations/` after the first
+  click, so reopening it is free and instant. About 0.25¢ per new explanation.
+
+**What broke / how we fixed it**
+- **8-K press releases were missing.** An 8-K's main document is often just a cover note;
+  the substance (an earnings or leadership press release) is in an attached Exhibit 99. The
+  assistant itself said so: "That press release is furnished as Exhibit 99.1… Its text isn't
+  in the documents I have." Fix: read each 8-K's Exhibit 99 attachments, found through the
+  SEC's official file listing for the filing (`index.json`, saved permanently).
+- **My test clicked the wrong buttons**, matching buttons to events by position (some events
+  have no button). Fixed by targeting each button by its unique ID. The answers it saved
+  during that faulty run were deleted and regenerated.
+
+**Tested on real events**
+- AmEx Q2 2023 provisions +192%: management's explanation from the Q2 2023 10-Q (higher net
+  write-offs and reserve builds tied to strong loan growth), cited.
+- Boeing −8.0% on January 8, 2024: found the Alaska Airlines door-plug accident and the FAA
+  grounding in the 10-K's subsequent-events note, and said plainly that the filing doesn't
+  link them to the stock move ("any link would be my inference").
+- Boeing CEO departure (March 2024): explained from the 8-K and its press release.
+- 7 new tests (138 total); linter clean.

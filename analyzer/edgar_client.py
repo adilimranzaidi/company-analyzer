@@ -207,6 +207,18 @@ class EdgarClient:
         """A filing document's HTML (paced and identified like every SEC request)."""
         return self._download(url).text
 
+    def exhibit_urls(self, document_url: str, prefix: str = "ex99", limit: int = 2) -> list[str]:
+        """Attachments of a filing whose names contain e.g. "ex99" (Exhibit 99: an 8-K's
+        press release, where the substance usually is). Uses the SEC's file listing for the
+        filing, saved permanently since filings never change."""
+        folder = document_url.rsplit("/", 1)[0]
+        listing = self._get_json(f"{folder}/index.json",
+                                 f"index_{folder.rsplit('/', 1)[-1]}.json", 24 * 365)
+        names = [item["name"] for item in listing.get("directory", {}).get("item", [])]
+        pattern = re.compile(rf"{prefix}[\d_\-]*", re.IGNORECASE)
+        hits = [n for n in names if pattern.search(n) and n.lower().endswith((".htm", ".html"))]
+        return [f"{folder}/{n}" for n in sorted(hits)[:limit]]
+
     def _download(self, url: str, params: dict | None = None) -> requests.Response:
         wait = MIN_SECONDS_BETWEEN_REQUESTS - (time.time() - self._last_request_time)
         if wait > 0:

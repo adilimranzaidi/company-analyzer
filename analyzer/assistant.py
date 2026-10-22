@@ -39,7 +39,9 @@ In each question you receive documents:
 - passages from {ticker}'s SEC filings (titled with the filing and section): the best matches from a \
 search of {searched},
 - "Dashboard figures": numbers calculated by the dashboard's Python code from {ticker}'s SEC data,
-- "How the dashboard works": the dashboard's methods and definitions.
+- "How the dashboard works": the dashboard's methods and definitions,
+- sometimes "News headlines": article titles from news outlets around a date. They are not company filings and \
+are not verified: attribute them ("a headline from Reuters said ..."), and prefer the filings when both cover a point.
 
 Rules:
 1. Facts about {ticker} must come from these documents, cited. If the documents don't answer the question, \
@@ -158,13 +160,18 @@ def _document(title: str, text: str, context: str = "") -> dict:
     return block
 
 
-def build_documents(passages: list[Passage], figures: str) -> tuple[list[dict], list[dict]]:
-    """Request documents, plus what each one is (for turning citations into sources)."""
+def build_documents(passages: list[Passage], figures: str,
+                    extra: list[tuple[str, str, str]] | None = None) -> tuple[list[dict], list[dict]]:
+    """Request documents, plus what each one is (for turning citations into sources).
+    extra: additional (title, text, url) documents, such as news headlines."""
     docs = [_document("Dashboard figures", figures,
                       "Numbers calculated by the dashboard's Python code."),
             _document("How the dashboard works", METHODS_GUIDE)]
     meta = [{"title": "Dashboard figures (calculated by this app)", "url": ""},
             {"title": "How the dashboard works", "url": ""}]
+    for title, text, url in extra or []:
+        docs.append(_document(title, text, "News headlines, not company filings."))
+        meta.append({"title": title, "url": url})
     for p in passages:
         docs.append(_document(f"{p.filing}, {p.section}", p.text, f"From {p.filing}. Link: {p.url}"))
         meta.append({"title": f"{p.filing}, {p.section}", "url": p.url})
@@ -198,9 +205,10 @@ def parse_answer(content, meta: list[dict]) -> tuple[str, str, list[Source]]:
 
 def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         figures: str, history: list[tuple[str, str]],
-        searched: str = "the filings chosen in the dashboard", on_text=None) -> Answer:
+        searched: str = "the filings chosen in the dashboard", on_text=None,
+        extra: list[tuple[str, str, str]] | None = None) -> Answer:
     client = anthropic.Anthropic(api_key=api_key)
-    docs, meta = build_documents(passages, figures)
+    docs, meta = build_documents(passages, figures, extra)
     messages = []
     for q, a in history[-HISTORY_TURNS:]:
         messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]

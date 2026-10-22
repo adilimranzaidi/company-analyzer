@@ -29,7 +29,8 @@ that files with the U.S. Securities and Exchange Commission (SEC).
    plain English
 5. ✅ Ask: a chat assistant that answers from the filings and the dashboard's own figures,
    with numbered, quoted sources (Claude Haiku 5.5 with the Citations feature)
-   - 5b. "Explain from filing": management's own explanation of each notable event, cited
+   - 5b. ✅ "Explain from filing": management's own explanation of each unusual change and
+     notable event, from the filing that covers it (including 8-K press releases), cited
    - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,
      key risks and interview talking points, all cited
 

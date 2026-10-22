@@ -8,7 +8,15 @@ import streamlit as st
 
 from analyzer.edgar_client import Company
 from analyzer.events import Event
+from analyzer.explain import (
+    event_question,
+    filings_for_event,
+    filings_for_stock_move,
+    headlines_document,
+)
+from analyzer.financials import MetricData
 from ui import data, headlines
+from ui.explain_ui import explain_box
 from ui.style import placeholder
 
 VIEWS = ["Notable events", "Headlines"]
@@ -33,7 +41,7 @@ def _event_html(e: Event) -> str:
             f'{evidence}</div></div>')
 
 
-def render(company: Company) -> None:
+def render(company: Company, metrics: dict[str, MetricData]) -> None:
     st.session_state.setdefault("news_view", VIEWS[0])
     view = st.segmented_control("View", VIEWS, key="news_view",
                                 label_visibility="collapsed") or VIEWS[0]
@@ -70,8 +78,10 @@ def render(company: Company) -> None:
     chosen = st.multiselect("Types", kinds, default=kinds, key=f"ev_kinds_{company.ticker}")
     shown = [e for e in events if e.category in chosen]
     news_cutoff = date.today() - timedelta(days=365)
+    table = data.filings(data.user_agent(), company.cik)
     for e in shown:
         st.markdown(_event_html(e), unsafe_allow_html=True)
+        _explain(company, metrics, e, table, news_cutoff)
         if e.date >= news_cutoff and data.get_secret("FINNHUB_API_KEY"):
             with st.expander("Headlines around that day"):
                 articles, error = data.event_headlines(company.ticker, e.date)
@@ -88,3 +98,21 @@ def render(company: Company) -> None:
                                 unsafe_allow_html=True)
     st.caption("Headlines are shown for events in the last year (Finnhub's free plan keeps "
                "about a year of news).")
+
+
+def _explain(company: Company, metrics: dict[str, MetricData], e: Event, table, news_cutoff):
+    """An 'Explain' button under each event, reading the filings that cover it."""
+    if e.category == "Stock move":
+        filings = filings_for_stock_move(table, e.date)
+
+        def extra():
+            if e.date < news_cutoff:
+                return None
+            articles, _ = data.event_headlines(company.ticker, e.date)
+            return [headlines_document(articles, company.ticker, e.date)] if articles else None
+    else:
+        filings = filings_for_event(table, e.url, e.date)
+        extra = None
+    explain_box(company, metrics, "event", f"{e.date}|{e.category}|{e.title}",
+                event_question(e.title, e.date, e.evidence if e.category != "Stock move" else ""),
+                filings, extra=extra, button_label="Explain this event")

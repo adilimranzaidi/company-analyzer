@@ -7,10 +7,13 @@ import streamlit as st
 
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value, ratio_chart
 from analyzer.edgar_client import Company
+from analyzer.explain import change_question, filings_for_change
 from analyzer.filings import index_url
 from analyzer.financials import MetricData
 from analyzer.glossary import short
 from analyzer.metrics import add_growth, margin_tables, roe_annual, roe_trailing, unusual_changes
+from ui import data
+from ui.explain_ui import explain_box
 from ui.terms import explain
 
 SENSITIVITY = {"High": 2.5, "Medium": 3.0, "Low": 4.0}
@@ -58,7 +61,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     elif view == "Growth and margins":
         _growth(shown, metrics, quarterly, years)
     else:
-        _events(events, period, years, sens, company.cik)
+        _events(events, period, years, sens, company, metrics)
 
 
 # -----------------------------------------------------------------------------
@@ -204,11 +207,12 @@ def _growth(shown, metrics, quarterly, years):
                 + "</div>", unsafe_allow_html=True)
 
 
-def _events(events, period, years, sens, cik):
+def _events(events, period, years, sens, company, metrics):
+    cik = company.cik
     st.markdown(
         '<div class="ca-muted">Changes that were unusual <i>for this company</i>, judged '
-        "against its own history. Python does the flagging. In Step 5b, each event gets an "
-        "\"Explain from filing\" button with management's own explanation, cited.</div>",
+        "against its own history. Python does the flagging; choose one below to get "
+        "management's own explanation from the filing, with sources.</div>",
         unsafe_allow_html=True)
     if events.empty:
         st.info(f"No unusual {period.lower()} changes in the last {years} years at "
@@ -232,3 +236,16 @@ def _events(events, period, years, sens, cik):
     st.caption("\"Typical change\" is the company's median year-over-year change for that "
                "metric. Several metrics flagged in one period usually share one cause, such "
                "as COVID-19 in 2020-21.")
+
+    # --- Explain one change from its filing --------------------------------------------
+    if ev.empty:
+        return
+    st.subheader("Why did it change?")
+    labels = [f"{r['period']} · {r['metric']} ({format_pct(r['yoy_growth'])})"
+              for _, r in ev.iterrows()]
+    picked = st.selectbox("Change to explain", labels, key="explain_change")
+    row = ev.iloc[labels.index(picked)]
+    table = data.filings(data.user_agent(), cik)
+    explain_box(company, metrics, "change", f"{row['metric_key']}|{row['period']}",
+                change_question(row["metric"], row["period"], format_pct(row["yoy_growth"])),
+                filings_for_change(table, row["orig_accn"]))
