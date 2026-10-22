@@ -19,3 +19,7 @@ Thumbs.db
 
 # --- Claude Code local settings ---
 .claude/
+
+# --- Not part of this Python project (left by a JavaScript tool) ---
+package-lock.json
+node_modules/
