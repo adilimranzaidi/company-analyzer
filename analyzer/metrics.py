@@ -51,16 +51,20 @@ def add_growth(df: pd.DataFrame, quarterly: bool) -> pd.DataFrame:
             out[col] = pd.Series(dtype="float64")
         return out
 
+    # Plain lists instead of walking the table row by row: same result, many times faster
+    # (this runs dozens of times on every page).
+    years = [int(y) for y in out["fiscal_year"]]
+    current = list(out["value"])
     if quarterly:
-        values = {_key(r): r["value"] for _, r in out.iterrows()}
-        records = out.to_dict("records")
-        out["prior_year_value"] = [values.get((fy - 1, q)) for fy, q in map(_key, records)]
-        out["prior_quarter_value"] = [values.get(_previous_quarter(*_key(r))) for r in records]
+        keys = list(zip(years, (int(q) for q in out["fiscal_quarter"]), strict=True))
+        values = dict(zip(keys, current, strict=True))
+        out["prior_year_value"] = [values.get((fy - 1, q)) for fy, q in keys]
+        out["prior_quarter_value"] = [values.get(_previous_quarter(fy, q)) for fy, q in keys]
         out["qoq_growth"] = [growth_rate(c, p) for c, p in
-                             zip(out["value"], out["prior_quarter_value"], strict=True)]
+                             zip(current, out["prior_quarter_value"], strict=True)]
     else:
-        values = {int(r["fiscal_year"]): r["value"] for _, r in out.iterrows()}
-        out["prior_year_value"] = [values.get(int(fy) - 1) for fy in out["fiscal_year"]]
+        values = dict(zip(years, current, strict=True))
+        out["prior_year_value"] = [values.get(fy - 1) for fy in years]
         out["prior_quarter_value"] = None
         out["qoq_growth"] = None
     out["yoy_growth"] = [growth_rate(c, p) for c, p in

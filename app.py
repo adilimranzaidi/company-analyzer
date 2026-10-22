@@ -6,6 +6,7 @@ Each section is drawn by a file in ui/, and all data and math live in analyzer/.
 
 import streamlit as st
 
+from analyzer.assistant import warm_up
 from analyzer.edgar_client import EdgarError, pretty_company_name
 from ui import ask, compare, data, filings, industry, news_events, overview, style, trends
 from ui.terms import glossary_panel
@@ -102,3 +103,6 @@ elif section == "Filings":
     filings.render(company)
 else:
     ask.render(company, metrics)
+
+# After the page is drawn: load the AI library in the background, ready for the first question.
+warm_up()

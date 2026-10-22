@@ -7,11 +7,12 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
+from analyzer.compare import snapshot
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
 from analyzer.events import Event, build_events
 from analyzer.filing_text import Passage, filing_lines, filing_passages
 from analyzer.filings import filings_table, latest_reports
-from analyzer.financials import MetricData, fiscal_period, load_all_metrics
+from analyzer.financials import MetricData, fiscal_period, load_all_metrics_saved
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, competition_text, suggest_peers
 from analyzer.prices import MARKET, PriceClient, PriceError, big_moves, describe_move
@@ -53,7 +54,8 @@ def company(agent: str, ticker: str) -> Company:
 
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
 def metrics(agent: str, cik: str, fye_month: int) -> dict[str, MetricData]:
-    return load_all_metrics(edgar_client(agent).company_facts(cik), fye_month)
+    # Saved to disk too, so a company opens quickly even after the dashboard restarts.
+    return load_all_metrics_saved(edgar_client(agent), cik, fye_month)
 
 
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
@@ -90,6 +92,14 @@ def company_and_metrics(ticker: str) -> tuple[Company, dict[str, MetricData]] | 
         return co, metrics(user_agent(), co.cik, co.fiscal_year_end_month)
     except EdgarError:
         return None
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def company_snapshot(agent: str, ticker: str) -> dict | None:
+    """One company's latest-year figures for the Industry and Compare tables, worked out
+    once instead of on every click."""
+    result = company_and_metrics(ticker)
+    return snapshot(result[1]) if result else None
 
 
 # Not cached here: NewsClient already saves successful results to disk for an hour, and
@@ -135,24 +145,27 @@ def event_headlines(ticker: str, day: date) -> tuple[list[dict], str]:
         return [], str(err)
 
 
-def price_moves(ticker: str) -> tuple[pd.DataFrame, str]:
-    """Big one-day stock moves over the event window, or ("", error message).
-    Not cached here (failures shouldn't be remembered); PriceClient saves prices to disk."""
-    try:
-        client = PriceClient(get_secret("TIINGO_API_KEY"))
-        start = date.today() - timedelta(days=round(365.25 * EVENT_YEARS))
-        stock = client.daily(ticker, start)
-        market = client.daily(MARKET, start)
-        return big_moves(stock, market), ""
-    except PriceError as err:
-        return pd.DataFrame(), str(err)
-
-
 def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
     """8-K events plus big stock moves, newest first, and a note if prices are unavailable.
     Each stock move lists any 8-K filed within three days, as a likely explanation."""
+    try:
+        return _events_with_moves(agent, cik, ticker), ""
+    except PriceError as err:          # not remembered, so it's retried on the next click
+        return _combine(agent, cik, ticker, pd.DataFrame()), str(err)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _events_with_moves(agent: str, cik: str, ticker: str) -> list[Event]:
+    """Remembered for an hour (it was being rebuilt on every click). Raises PriceError
+    when prices can't be loaded; Streamlit never remembers a failure."""
+    client = PriceClient(get_secret("TIINGO_API_KEY"))
+    start = date.today() - timedelta(days=round(365.25 * EVENT_YEARS))
+    moves = big_moves(client.daily(ticker, start), client.daily(MARKET, start))
+    return _combine(agent, cik, ticker, moves)
+
+
+def _combine(agent: str, cik: str, ticker: str, moves: pd.DataFrame) -> list[Event]:
     filed = events(agent, cik)
-    moves, note = price_moves(ticker)
     # For explaining stock moves, every 8-K counts, including routine earnings releases:
     # many of the biggest one-day moves happen on earnings day.
     table = filings(agent, cik)
@@ -168,7 +181,7 @@ def all_events(agent: str, cik: str, ticker: str) -> tuple[list[Event], str]:
                 for _, r in nearby.iterrows()) + "."
         combined.append(Event(row["date"], "Stock move", title, severity, explanation, "",
                               "Price data"))
-    return sorted(combined, key=lambda e: e.date, reverse=True), note
+    return sorted(combined, key=lambda e: e.date, reverse=True)
 
 
 @st.cache_resource(show_spinner=False)

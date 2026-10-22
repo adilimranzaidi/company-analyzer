@@ -629,3 +629,41 @@ answer took ~12s with nothing on screen until the end.
 - Microsoft (10-K Jul 2026 is the newest report): used the 10-K's MD&A, noted that Q4 is
   derived and Q4 EPS isn't, and flagged the OpenAI investment gains in fiscal 2026 profit. 0.55¢.
 - 6 new tests (144 total); linter clean.
+
+---
+
+## Speed-up (2026-10-22)
+
+**How we measured:** every section timed with Streamlit's test runner for AmEx, on the
+first visit after starting the dashboard and on a repeat visit (a click). Then profiled
+to see where the time went.
+
+| | Before | After (first start) | After (typical, tables saved) |
+|---|---|---|---|
+| Overview, first visit | 26.5s | 9.9s | 7.7s |
+| Industry, first visit | 22.4s | 14.9s | 3.5s |
+| News and events, first visit | 3.5s | 1.0s | 0.8s |
+| Overview, each click | 1.2s | 0.7s | 0.7s |
+| Industry, each click | 1.7s | 1.2s | 0.7s |
+
+**The five causes and fixes**
+1. **The AI library loaded with the page.** Anthropic's library has 2,300+ files and took
+   ~16s to load, though only Ask and the explain buttons use it. Now it loads only when
+   needed, in the background after the first page is drawn.
+2. **Turning SEC data into tables took 2-5s per company, every restart.** Two wasteful
+   steps sped up (stock-split checks and Q4 calculation, ~25% faster). The finished tables
+   are now saved to disk (`data/cache/metrics/`), rebuilt only when the SEC data is
+   re-downloaded or the cleaning rules change. Checked: identical results for all 144
+   tables across 12 companies.
+3. **Industry rebuilt every peer's figures.** Peers now use the saved tables, and each
+   peer's snapshot row is remembered instead of recalculated on every click.
+4. **Work redone on every click.** Growth rates were calculated row by row, dozens of
+   times per page: now 5x faster (identical results). The events list (8-Ks plus stock
+   moves) is remembered for an hour; a price-service failure is not remembered.
+5. **Competitor matching checked thousands of company names sentence by sentence.** A
+   quick "is the name in the text at all?" check first: 2-5s down to ~0.3s, same peers.
+
+**What's left:** about 7s on the very first page after starting the dashboard is mostly
+loading Python's data libraries (pandas, Streamlit, Plotly), once per start. Ask answers
+still take ~7-9s, which is Claude writing the answer.
+- 1 new test (145 total); linter clean.

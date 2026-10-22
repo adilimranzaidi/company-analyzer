@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from analyzer.charts import format_pct, format_ratio, format_value
-from analyzer.compare import growth_series, snapshot
+from analyzer.compare import growth_series
 from analyzer.financials import MetricData
 from analyzer.glossary import short
 from analyzer.metrics import margin_tables, roe_annual
@@ -64,7 +64,8 @@ def series_for(choice: str, metrics: dict[str, MetricData]) -> pd.DataFrame:
 
 
 def snapshots(loaded: dict[str, tuple]) -> dict[str, dict]:
-    return {label: snapshot(m) for label, (_, m) in loaded.items()}
+    return {label: data.company_snapshot(data.user_agent(), co.ticker)
+            for label, (co, _) in loaded.items()}
 
 
 def column_help() -> dict:

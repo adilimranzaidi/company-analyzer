@@ -9,9 +9,11 @@ How accuracy is protected
 - If the documents don't answer the question, Claude is told to say so, not guess.
 """
 
+import importlib
+import sys
+import threading
 from dataclasses import dataclass, field
 
-import anthropic
 import pandas as pd
 
 from analyzer.charts import format_pct, format_ratio, format_value
@@ -204,12 +206,25 @@ def parse_answer(content, meta: list[dict]) -> tuple[str, str, list[Source]]:
     return "".join(marked).strip(), "".join(plain).strip(), list(numbered.values())
 
 
+def _anthropic():
+    """Anthropic's library, loaded on first use. It takes about 16 seconds to load on this
+    computer (it has over 2,000 files), so the dashboard doesn't load it until it's needed."""
+    return importlib.import_module("anthropic")
+
+
+def warm_up() -> None:
+    """Load Anthropic's library in the background, so it's ready before the first question
+    without making the first page wait for it."""
+    if "anthropic" not in sys.modules:
+        threading.Thread(target=_anthropic, daemon=True).start()
+
+
 def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         figures: str, history: list[tuple[str, str]],
         searched: str = "the filings chosen in the dashboard", on_text=None,
         extra: list[tuple[str, str, str]] | None = None,
         length_rule: str = CHAT_LENGTH) -> Answer:
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _anthropic().Anthropic(api_key=api_key)
     docs, meta = build_documents(passages, figures, extra)
     messages = []
     for q, a in history[-HISTORY_TURNS:]:
@@ -253,6 +268,9 @@ def search_query(question: str, history: list[tuple[str, str]]) -> str:
 
 
 def friendly_error(err: Exception) -> str:
+    anthropic = sys.modules.get("anthropic")
+    if anthropic is None:                 # the error came before the library was loaded
+        return f"Something went wrong: {err}"
     if isinstance(err, anthropic.AuthenticationError):
         return "The Anthropic API key wasn't accepted. Check ANTHROPIC_API_KEY in .streamlit/secrets.toml."
     if isinstance(err, anthropic.PermissionDeniedError):

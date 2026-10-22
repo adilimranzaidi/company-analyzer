@@ -240,3 +240,31 @@ def test_stale_quarterly_table_is_hidden_when_annual_is_current():
     assert md.quarterly.empty
     assert "stop at Q2 FY2022" in md.note
     assert list(md.annual["period"])[-1] == "FY2025"
+
+
+class _FakeClient:
+    """Stands in for EdgarClient: counts downloads of the facts."""
+    def __init__(self, facts, version="100"):
+        self.facts, self.version, self.downloads = facts, version, 0
+
+    def facts_version(self, cik):
+        return self.version
+
+    def company_facts(self, cik):
+        self.downloads += 1
+        return self.facts
+
+
+def test_saved_tables_are_reused_until_the_facts_change(tmp_path):
+    from analyzer.financials import load_all_metrics, load_all_metrics_saved
+    facts = facts_with({"Revenues": YEAR_2025})
+    client = _FakeClient(facts)
+    first = load_all_metrics_saved(client, "1", 12, tmp_path)
+    second = load_all_metrics_saved(client, "1", 12, tmp_path)
+    assert client.downloads == 1                      # second call read the saved copy
+    assert second["revenue"].annual.equals(first["revenue"].annual)
+    assert first["revenue"].annual.equals(load_all_metrics(facts, 12)["revenue"].annual)
+    client.version = "200"                             # a fresh download of the facts
+    load_all_metrics_saved(client, "1", 12, tmp_path)
+    assert client.downloads == 2
+    assert len(list(tmp_path.glob("1_*.pkl"))) == 1    # the old copy was replaced

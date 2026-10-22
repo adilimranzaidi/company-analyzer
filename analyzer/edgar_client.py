@@ -315,6 +315,18 @@ class EdgarClient:
         company.filer_category = details.get("category", "") or ""
         return company
 
+    def facts_version(self, cik: str) -> str | None:
+        """When the saved copy of a company's facts was downloaded, or None if there's no
+        fresh copy. Tables built from the facts are saved under this, so a new download
+        means they're rebuilt."""
+        cache_file = self.cache_dir / f"companyfacts_{format_cik(cik)}.json"
+        if not cache_file.exists():
+            return None
+        mtime = cache_file.stat().st_mtime
+        if (time.time() - mtime) / 3600 >= COMPANY_FACTS_MAX_AGE_HOURS:
+            return None
+        return str(int(mtime))
+
     def company_facts(self, cik: str) -> dict:
         """Every number the company has tagged in its filings (the SEC's "XBRL" data)."""
         cik = format_cik(cik)

@@ -13,10 +13,17 @@ such as "NetIncomeLoss". This file:
 Only subtraction is done here. Growth rates and margins live in metrics.py.
 """
 
+import hashlib
+import pickle
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from itertools import groupby
+from pathlib import Path
 
 import pandas as pd
+
+# Changes whenever this file changes, so tables saved by older cleaning rules are rebuilt.
+RULES_VERSION = hashlib.sha1(Path(__file__).read_bytes()).hexdigest()[:10]
 
 # How many days a period must span to count as a quarter or a year.
 # Real quarters run 89-98 days (some companies use 13- or 14-week quarters),
@@ -290,9 +297,11 @@ def detect_splits(df: pd.DataFrame) -> list[Split]:
     """Find splits by comparing the same period's per-share figure across filings."""
     evidence = []
     period_cols = ["start", "end"] if "start" in df else ["end"]
-    for _, group in df.groupby(period_cols):
-        group = group.sort_values("filed")
-        records = group.to_dict("records")
+    # One sort, then walk the rows period by period (much faster than a table per period).
+    ordered = (df.dropna(subset=period_cols)
+                 .sort_values(period_cols + ["filed"], kind="stable").to_dict("records"))
+    for _, group in groupby(ordered, key=lambda r: tuple(r[c] for c in period_cols)):
+        records = list(group)
         # Each filing paired with the next one (the second list is one shorter on purpose).
         for older, newer in zip(records, records[1:], strict=False):
             if older["filed"] == newer["filed"] or not older["value"] or not newer["value"]:
@@ -363,9 +372,10 @@ def _derive_q4(annual: pd.DataFrame, quarterly: pd.DataFrame) -> pd.DataFrame:
     """Q4 = Full year - (Q1 + Q2 + Q3), only when all three quarters are known
     and the company didn't report Q4 directly."""
     derived = []
-    for _, year in annual.iterrows():
+    by_year = dict(tuple(quarterly.groupby("fiscal_year"))) if not quarterly.empty else {}
+    for year in annual.to_dict("records"):
         fy = year["fiscal_year"]
-        same_year = quarterly[quarterly["fiscal_year"] == fy]
+        same_year = by_year.get(fy, quarterly.iloc[0:0])
         if 4 in set(same_year["fiscal_quarter"]):
             continue  # Q4 was reported directly; use that instead
         q123 = same_year[same_year["fiscal_quarter"].isin([1, 2, 3])]
@@ -486,6 +496,33 @@ def calculated_bank_revenue(results: dict[str, MetricData]) -> MetricData | None
         results["revenue"].choice.passed_over if results["revenue"].choice else [],
     )
     return MetricData(revenue_metric, choice, annual, quarterly)
+
+
+def load_all_metrics_saved(client, cik: str, fye_month: int,
+                           cache_dir: Path | None = None) -> dict[str, MetricData]:
+    """load_all_metrics, but saved to disk: building the tables takes a few seconds per
+    company, reading them back takes a few milliseconds.
+
+    A saved copy is reused only if it was built from the same download of the company's
+    facts and by the same version of this file's cleaning rules; otherwise it's rebuilt."""
+    folder = Path(cache_dir or client.cache_dir / "metrics")
+    version = client.facts_version(cik)
+    if version:
+        path = folder / f"{cik}_{fye_month}_{version}_{RULES_VERSION}.pkl"
+        if path.exists():
+            try:
+                return pickle.loads(path.read_bytes())
+            except Exception:            # unreadable copy: rebuild it below
+                pass
+    results = load_all_metrics(client.company_facts(cik), fye_month)
+    version = client.facts_version(cik)
+    if version:
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob(f"{cik}_*.pkl"):   # keep one copy per company
+            old.unlink(missing_ok=True)
+        (folder / f"{cik}_{fye_month}_{version}_{RULES_VERSION}.pkl").write_bytes(
+            pickle.dumps(results))
+    return results
 
 
 def load_all_metrics(facts: dict, fye_month: int) -> dict[str, MetricData]:

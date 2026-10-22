@@ -73,6 +73,8 @@ def find_named_competitors(text: str, companies: list[dict], exclude_cik: str,
         brand = brand_name(c["name"])
         if len(brand) < 3 or (" " not in brand and brand.lower() in _COMMON_WORDS):
             continue
+        if brand not in text:      # quick check first: most companies aren't mentioned at all
+            continue
         pattern = re.compile(rf"(?<![A-Za-z]){re.escape(brand)}(?![A-Za-z])")
         hit = next((s for s in sentences if _names_company(pattern, brand, s, text)), None)
         if hit is None:
