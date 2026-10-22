@@ -748,3 +748,66 @@ searches for other skills and "synced" is a sync folder, so neither applies.)
 - The app name sat 9px below the search box because of a negative margin Streamlit puts on
   text blocks; removed for that one element.
 - 3 new tests (148 total); linter clean; every section opened without errors for AXP and AAPL.
+
+---
+
+## Step 7: The web dashboard (2026-10-22)
+
+**Why:** Streamlit redraws the whole page on every click, so it could never feel smooth.
+The screen was rebuilt as a single web page; all the data, calculation and AI code
+(`analyzer/`) is unchanged and shared. Every feature carried over, including the briefing.
+
+**What we did** (`webapp/`)
+- `service.py`: the same loading rules as before, without Streamlit. Results are
+  remembered; when several requests ask for the same thing at once, the work runs once;
+  rival companies load side by side.
+- `payloads.py`: what each panel shows, all calculated in Python (growth, margins, takeaways,
+  the money-flow split). The page only draws and formats.
+- `server.py`: Starlette (already installed with Streamlit, so nothing new), local only,
+  compressed replies, and live streams for the assistant.
+- `ai.py`: the briefing, "explain this" and the chat, streaming the answer's words as they
+  are written. Saved answers from the old version are reused.
+- The page (`static/`): seven panels that glide sideways (Snapshot, Briefing, Trends, Where
+  the money goes, Price and events, Rivals, Filings), an Ask drawer, a glossary drawer, and
+  a company search (press `/`). Charts are hand-drawn SVG (no chart library): lines morph
+  between measures, the price chart zooms smoothly, the money flow and bubbles grow in.
+  Each company's logo comes from Finnhub, and its brand colour is read from the logo.
+  Links like `#MSFT/rivals` open a company and panel directly.
+
+**Design tools used**
+- frontend-design: the plan (ledger-navy ground, Sora + Manrope, one bold element: the
+  morphing chart in the company's colour).
+- design-taste-frontend: app-screen rules; its inspector and code scanner both pass with
+  no failures or warnings (fixed: white text on light brand buttons, invisible closed
+  overlays counted as covering text, a stretched chart card, an emoji ✕, a resting shadow).
+- apple-design: motion that starts from where it is and can be interrupted, press
+  feedback, drawers that leave the way they came, reduced-motion support.
+- web-design-guidelines: heading order, labels on icon buttons, visible focus, real
+  ellipses, links for every view, screen-reader announcements for chat answers.
+
+**Speed** (measured)
+
+| | Streamlit | Web dashboard |
+|---|---|---|
+| Open a company: figures and chart on screen | 7.7s | 0.6s |
+| Switch panel | 0.7-1.5s | 0.02-0.04s |
+| Switch company | several seconds | 0.1s |
+| A company's data, second request | ~1s | 0.016s |
+
+**What broke / how we fixed it**
+- **Re-opening a company took 18s, slower than the first time.** The company's data wasn't
+  remembered, and reading filings for the chat in the background was competing with it
+  (Python runs one thing at a time). Fixed: each panel's data is remembered, and the chat's
+  filing reading waits until Ask is opened or the page has been quiet for a while.
+- **Logo download failed once (34s, nothing).** The image host redirects and was briefly
+  slow. Now: short timeouts, one retry, and the logo is saved; the page shows the ticker
+  until it arrives.
+- **Count-up numbers could flash a negative value** on the first frame (frame time a hair
+  before the start). Clamped; and if a browser stops sending frames, a timer lands every
+  animation on its final value.
+- **McDonald's red** made rising lines look like falls (red means "down" here). When a
+  logo's main colour is red and it has a second colour (McDonald's yellow), that's used.
+- **McDonald's 398% return on equity** is right but misleading; the takeaway now explains
+  that equity is small after years of buybacks.
+- Bubble chart clipped its top bubbles: the axis now always reaches past the highest value.
+- 7 new tests (155 total); linter clean.

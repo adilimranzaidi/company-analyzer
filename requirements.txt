@@ -5,3 +5,6 @@ plotly==7.1.0
 beautifulsoup4==4.15.0
 anthropic==1.15.0
 pytest==9.1.1
+# The web dashboard's server (both already come with Streamlit; pinned so they stay put)
+starlette==1.8.0
+uvicorn==0.54.0

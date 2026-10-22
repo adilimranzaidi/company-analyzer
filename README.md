@@ -1,22 +1,24 @@
 # Company Analyzer
 
-A web dashboard for understanding a public company's financial position, built with
-Python and Streamlit. It starts with American Express (AXP) and works for any company
-that files with the U.S. Securities and Exchange Commission (SEC).
+A fast, single-page dashboard for understanding a public company's financial position.
+Pick any company that files with the U.S. Securities and Exchange Commission (SEC): its
+figures, trends, rivals, events and a cited briefing glide in side by side, coloured in the
+company's own brand colour, with an AI assistant that answers from the company's filings.
+Built with Python (data and calculations) and a hand-built web page (no front-end framework).
 
 > **Status:** in development. See [BUILD_LOG.md](BUILD_LOG.md) for progress.
 
 ## Screenshots
 
-**Overview:** the latest quarter's key figures, notable events, and a cited company briefing.
+![Snapshot: key figures, the main trend and what to take away](docs/screenshots/snapshot.png)
 
-![Overview](docs/screenshots/overview.png)
-
-| Company trends | Industry |
+| Briefing | Trends |
 |---|---|
-| ![Company trends: quarterly revenue with derived Q4s and unusual changes marked](docs/screenshots/trends.png) | ![Industry: competitors named in the 10-K and a peer snapshot](docs/screenshots/industry.png) |
-| **News and events** | **Ask** |
-| ![News and events: 8-K events and market-adjusted stock moves](docs/screenshots/news.png) | ![Ask: questions answered from the filings, with sources](docs/screenshots/ask.png) |
+| ![Briefing: a cited company briefing written from its filings](docs/screenshots/briefing.png) | ![Trends: every figure over time, unusual changes marked](docs/screenshots/trends.png) |
+| **Where the money goes** | **Price and events** |
+| ![Where each dollar of revenue went](docs/screenshots/flow.png) | ![Share price with stock moves and 8-K events marked](docs/screenshots/price.png) |
+| **Rivals** | **On a phone** |
+| ![Rivals: growth against profitability, ranks and a side-by-side table](docs/screenshots/rivals.png) | ![McDonald's on a phone, in its own brand colour](docs/screenshots/phone.png) |
 
 ## The core rule: code does the numbers, AI does the words
 
@@ -47,7 +49,11 @@ that files with the U.S. Securities and Exchange Commission (SEC).
      its latest quarter, recent events, key risks and interview talking points, all cited
      and written once per new 10-K or 10-Q
 6. ✅ Polish: speed-ups, a design review (Apple's design principles, web interface
-   guidelines, app-screen typography and layout), README screenshots. A public link is next.
+   guidelines, app-screen typography and layout), README screenshots.
+7. ✅ The web dashboard: a rebuild of the screen as a smooth single-page site (panels that
+   glide sideways, charts that morph, a chat drawer, company logos and brand colours),
+   about 10x faster than the Streamlit version, with every feature carried over. A public
+   link is next.
 
 **Version 2: macro layer and segments**
 - Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)
@@ -78,11 +84,15 @@ Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in:
 Then start the dashboard:
 
 ```bash
-streamlit run app.py
+python -m webapp.server
 ```
 
-On Windows you can also double-click `start_dashboard.bat`, which starts the dashboard and
-opens it at http://127.0.0.1:8501. Keep its window open while you use the dashboard.
+and open http://127.0.0.1:8600. On Windows you can instead double-click
+`start_dashboard.bat`, which starts it and opens your browser. Keep its window open while
+you use the dashboard. Only this computer can open it.
+
+The earlier Streamlit version still works (`streamlit run app.py`, or
+`start_classic_dashboard.bat`).
 
 ## Checking the code
 
@@ -95,9 +105,13 @@ ruff check .              # linter (settings in ruff.toml)
 ## Project layout
 
 ```
-app.py                 the page frame: search, company header, section menu
-ui/                    one file per section (Overview, Company trends, Industry,
-                       Compare, Headlines, Filings, Ask); layout only
+webapp/                the web dashboard
+  server.py            serves the page and each panel's data (Starlette, local only)
+  payloads.py          what each panel shows, calculated in Python
+  service.py           loading and remembering data, side by side where possible
+  ai.py                the briefing, "explain this" and the chat, streamed live
+  static/              the page: index.html, app.css, app.js, charts.js (hand-drawn SVG)
+app.py, ui/            the earlier Streamlit version
 analyzer/              all data and math: SEC client, data cleaning, metrics,
                        peers, comparisons, headlines, filing reader, search, assistant
 tests/                 automated checks for every calculation and cleaning rule
@@ -109,6 +123,7 @@ BUILD_LOG.md           what was built, what broke, and how it was fixed
 
 - [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces):
   company facts (XBRL), submissions, industry lists, and "frames" (one figure for every company)
-- [Finnhub](https://finnhub.io/): company news by ticker, for headlines (free key)
+- [Finnhub](https://finnhub.io/): company news by ticker, for headlines, and company
+  logos, websites and market values (free key)
 - [Tiingo](https://www.tiingo.com/): daily stock prices, for big-move detection (free key)
 - [Anthropic Claude API](https://docs.anthropic.com/): the Ask assistant (Claude Haiku 5.5, Citations)

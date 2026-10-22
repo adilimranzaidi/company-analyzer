@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>Company Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="modulepreload" href="/static/app.js">
+<link rel="modulepreload" href="/static/charts.js">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-top">
+    <div class="logo" id="logo"><span class="mono" id="mono"></span><img id="logo-img" alt=""></div>
+    <div class="co"><h1 id="co-name">Loading…</h1><div class="meta" id="co-meta"></div></div>
+    <button class="search-btn pressable" id="open-search" aria-label="Search for a company">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span>Search companies</span><kbd>/</kbd>
+    </button>
+    <div class="quote">
+      <svg class="spark" id="spark" viewBox="0 0 110 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div><div class="px" id="px">&nbsp;</div><div class="chg" id="chg">&nbsp;</div></div>
+    </div>
+    <button class="icon-btn pressable hide-sm" id="open-glossary">Glossary</button>
+    <button class="icon-btn primary pressable" id="open-ask">Ask</button>
+  </div>
+  <div class="bar-nav">
+    <nav class="nav" id="nav" role="tablist" aria-label="Views"><span class="pill" id="pill" aria-hidden="true"></span></nav>
+    <button class="simple" id="simple" role="switch" aria-checked="false"><span class="switch"></span><span>Explain it simply</span></button>
+  </div>
+  <div class="progress" id="progress"></div>
+</header>
+
+<main class="stage" id="stage"></main>
+<div class="dots" id="dots" aria-hidden="true"></div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="ask" aria-label="Ask about this company" aria-hidden="true">
+  <div class="drawer-head"><h2>Ask</h2><span class="faint" id="ask-scope"></span><button class="icon-btn pressable" data-close>Close</button></div>
+  <div class="drawer-body" id="ask-body" aria-live="polite"></div>
+  <form class="drawer-foot" id="ask-form"><input id="ask-input" autocomplete="off" placeholder="What drove results in the latest quarter?" aria-label="Your question"><button class="icon-btn primary pressable">Send</button></form>
+</aside>
+<aside class="drawer" id="glossary" aria-label="Glossary" aria-hidden="true">
+  <div class="drawer-head"><h2>Glossary</h2><button class="icon-btn pressable" data-close>Close</button></div>
+  <div class="drawer-foot" style="border-top:0;border-bottom:1px solid var(--line)"><input id="gl-input" autocomplete="off" placeholder="Return on equity" aria-label="Search terms"></div>
+  <div class="drawer-body" id="gl-body"></div>
+</aside>
+<div class="sheet" id="search" role="dialog" aria-label="Search companies" aria-hidden="true">
+  <input id="search-input" autocomplete="off" spellcheck="false" placeholder="Company name or ticker, like Visa or V" aria-label="Company name or ticker">
+  <div class="results" id="results" role="listbox"></div>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
