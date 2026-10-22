@@ -18,7 +18,7 @@ SERIES_CHOICES = ["Revenue growth", "Net income growth", "EPS growth", "Net marg
 def load_many(labels: list[str], options_by_label: dict[str, dict]) -> dict[str, tuple]:
     """label -> (company, metrics) for each chosen company that has data."""
     loaded = {}
-    progress = st.progress(0.0, text="Loading companies from SEC EDGAR...")
+    progress = st.progress(0.0, text="Loading companies from SEC EDGAR…")
     for i, label in enumerate(labels):
         opt = options_by_label.get(label)
         result = data.company_and_metrics(opt["ticker"]) if opt else None

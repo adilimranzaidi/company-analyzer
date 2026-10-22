@@ -19,7 +19,7 @@ from ui.peer_tables import (
     snapshot_row,
     snapshots,
 )
-from ui.style import placeholder
+from ui.style import number_columns, placeholder
 
 
 def render(company: Company, metrics: dict[str, MetricData], options: list[dict]) -> None:
@@ -27,7 +27,7 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
     self_label = next((o["label"] for o in options if o["ticker"] == company.ticker),
                       company.ticker)
 
-    with st.spinner("Finding competitors (reading the 10-K the first time)..."):
+    with st.spinner("Finding competitors (reading the 10-K the first time)…"):
         suggested = data.peers(data.user_agent(), company.cik, company.sic_code)
     suggested_labels = [f"{p.name} ({p.ticker})" for p in suggested]
     suggested_labels = [label for label in suggested_labels if label in by_label]
@@ -65,7 +65,7 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
     med = industry_medians(peer_snaps)
 
     # --- Snapshot table ---------------------------------------------------------
-    st.subheader("Industry snapshot")
+    st.header("Industry snapshot")
     rows = [snapshot_row(label, s) for label, s in snaps.items()]
     rows.append({
         "Company": f"Peer median ({len(peer_snaps)} companies)", "Fiscal year": "",
@@ -74,7 +74,9 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
         "EPS growth": format_pct(med["eps_growth"]),
         "Latest quarter revenue growth": format_pct(med["quarter_revenue_growth"]),
     })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=column_help())
+    table = pd.DataFrame(rows)
+    st.dataframe(table, hide_index=True, width="stretch",
+                 column_config=number_columns(table, column_help()))
     st.caption("Each company's own latest fiscal year; year-ends differ between companies. "
                "The median (middle value) is used so one unusual company can't skew it.")
 
@@ -94,11 +96,11 @@ def render(company: Company, metrics: dict[str, MetricData], options: list[dict]
                              f'{comparison} the peer median of {fmt(vs)}</span>'
                              f'<span>{_ordinal(r[0])} of {r[1]}</span></div>')
         if lines:
-            st.subheader(f"Where {company.ticker} ranks")
+            st.header(f"Where {company.ticker} ranks")
             st.markdown("".join(lines), unsafe_allow_html=True)
 
     # --- Industry trend chart -----------------------------------------------------
-    st.subheader("Industry trends")
+    st.header("Industry trends")
     choice = st.selectbox("Measure", SERIES_CHOICES, key="ind_measure")
     company_series = series_for(choice, loaded[self_label][1]) if self_label in loaded \
         else pd.DataFrame()
@@ -132,7 +134,7 @@ def _ordinal(n: int) -> str:
 
 
 def _drivers() -> None:
-    st.subheader("Industry drivers")
+    st.header("Industry drivers")
     placeholder(
         "<b>Coming next.</b> An explorable list of what moves this industry, from two "
         "sources:<br>• <b>What the company says drives its results</b>: pulled from its "

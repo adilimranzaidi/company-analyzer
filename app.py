@@ -26,7 +26,7 @@ if "@" not in agent:
 
 # --- Sidebar: setup check (out of the way) ----------------------------------
 with st.sidebar:
-    st.header("Setup check")
+    st.markdown("**Setup check**")
     for label, secret in [("SEC contact", "SEC_USER_AGENT"),
                           ("Anthropic API key", "ANTHROPIC_API_KEY"),
                           ("Finnhub key (headlines)", "FINNHUB_API_KEY"),
@@ -43,7 +43,13 @@ except EdgarError as err:
 labels = [o["label"] for o in options]
 ticker_by_label = {o["label"]: o["ticker"] for o in options}
 
-st.session_state.setdefault("ticker", "AXP")
+# The web address carries the company and section (?ticker=AXP&section=Industry), so a page
+# can be bookmarked or shared. It's read once, when the page is first opened.
+if "ticker" not in st.session_state:
+    from_url = st.query_params.get("ticker", "").strip().upper()
+    st.session_state.ticker = from_url if from_url in ticker_by_label.values() else "AXP"
+    if st.query_params.get("section") in SECTIONS:
+        st.session_state.section = st.query_params["section"]
 current_label = next((o["label"] for o in options if o["ticker"] == st.session_state.ticker),
                      None)
 
@@ -67,7 +73,7 @@ search_col.selectbox(
 
 # --- Company header -----------------------------------------------------------
 try:
-    with st.spinner("Loading company from SEC EDGAR..."):
+    with st.spinner("Loading company from SEC EDGAR…"):
         company = data.company(agent, st.session_state.ticker)
         metrics = data.metrics(agent, company.cik, company.fiscal_year_end_month)
 except EdgarError as err:
@@ -86,6 +92,7 @@ st.markdown(f'<div class="ca-meta">{" · ".join(m for m in meta if m)} · '
 st.session_state.setdefault("section", "Overview")
 section = st.segmented_control("Section", SECTIONS, key="section",
                                label_visibility="collapsed") or "Overview"
+st.query_params.from_dict({"ticker": company.ticker, "section": section})
 
 if section == "Overview":
     overview.render(company, metrics)

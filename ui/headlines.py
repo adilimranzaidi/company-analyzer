@@ -44,7 +44,7 @@ def render(company: Company) -> None:
         st.markdown(f'<div class="ca-muted">Peers: {html.escape(", ".join(tickers))} '
                     "(edit them in the Industry section)</div>", unsafe_allow_html=True)
 
-    with st.spinner("Fetching headlines from Finnhub..."):
+    with st.spinner("Fetching headlines from Finnhub…"):
         articles, error, saved_hours_ago = data.headlines(tickers, SPANS[span_label])
     if error:
         st.warning(error)

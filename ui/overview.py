@@ -2,7 +2,6 @@
 charts only when asked for."""
 
 import html
-from dataclasses import replace
 
 import streamlit as st
 
@@ -56,9 +55,7 @@ def _synopsis(company: Company, metrics: dict[str, MetricData]) -> None:
 
     saved = load_saved(key)
     if saved:
-        # The briefing's own headings sit one level below the page's section headings.
-        _show_answer(replace(saved, text=saved.text.replace("### ", "#### ")),
-                     show_cost=False)
+        _show_answer(saved, show_cost=False)
         st.caption(f"Written from the {annual['form']} filed {annual['filed']:%b %d, %Y}"
                    + (f" and the {recent['form']} filed {recent['filed']:%b %d, %Y}"
                       if recent is not annual else "")
@@ -76,7 +73,7 @@ def _synopsis(company: Company, metrics: dict[str, MetricData]) -> None:
                           "Saved afterwards, so reopening it is free."):
         return
 
-    with st.spinner("Reading the latest 10-K and 10-Q and writing the synopsis..."):
+    with st.spinner("Reading the latest 10-K and 10-Q and writing the synopsis…"):
         try:
             agent = data.user_agent()
             annual_passages = data.filing_row_passages(agent, annual, _filing_label(annual))
@@ -105,7 +102,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     # --- Key figures -------------------------------------------------------
     rev = _figure(metrics.get("revenue"))
     period = rev["period"] if rev is not None else None
-    st.subheader(f"Latest quarter{f' · {period}' if period else ''}")
+    st.header(f"Latest quarter{f' · {period}' if period else ''}")
 
     tiles = []
     for key, label in [("revenue", "Revenue"), ("net_income", "Net income"),
@@ -134,8 +131,8 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
         st.info("No recent quarterly figures are available for this company.")
 
     # --- Latest notable events (from 8-K filings) ----------------------------
-    st.subheader("Latest notable events")
-    with st.spinner("Reading 8-K filings and daily prices (first time only)..."):
+    st.header("Latest notable events")
+    with st.spinner("Reading 8-K filings and daily prices (first time only)…"):
         events, _ = data.all_events(data.user_agent(), company.cik, company.ticker)
     if not events:
         st.markdown(f'<div class="ca-muted">No notable 8-K events in the last '
@@ -175,5 +172,5 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
                     unsafe_allow_html=True)
 
     # --- Written briefing ------------------------------------------------------
-    st.subheader("Company briefing")
+    st.header("Company briefing")
     _synopsis(company, metrics)

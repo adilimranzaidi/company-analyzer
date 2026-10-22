@@ -6,6 +6,18 @@ that files with the U.S. Securities and Exchange Commission (SEC).
 
 > **Status:** in development. See [BUILD_LOG.md](BUILD_LOG.md) for progress.
 
+## Screenshots
+
+**Overview:** the latest quarter's key figures, notable events, and a cited company briefing.
+
+![Overview](docs/screenshots/overview.png)
+
+| Company trends | Industry |
+|---|---|
+| ![Company trends: quarterly revenue with derived Q4s and unusual changes marked](docs/screenshots/trends.png) | ![Industry: competitors named in the 10-K and a peer snapshot](docs/screenshots/industry.png) |
+| **News and events** | **Ask** |
+| ![News and events: 8-K events and market-adjusted stock moves](docs/screenshots/news.png) | ![Ask: questions answered from the filings, with sources](docs/screenshots/ask.png) |
+
 ## The core rule: code does the numbers, AI does the words
 
 - **Every number** (revenue, net income, EPS, growth rates, margins) comes straight from
@@ -34,6 +46,8 @@ that files with the U.S. Securities and Exchange Commission (SEC).
    - 5c. ✅ Company synopsis on the Overview: what the company does, how it makes money,
      its latest quarter, recent events, key risks and interview talking points, all cited
      and written once per new 10-K or 10-Q
+6. ✅ Polish: speed-ups, a design review (Apple's design principles, web interface
+   guidelines, app-screen typography and layout), README screenshots. A public link is next.
 
 **Version 2: macro layer and segments**
 - Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)

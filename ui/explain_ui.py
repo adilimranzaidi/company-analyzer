@@ -34,7 +34,7 @@ def explain_box(company: Company, metrics: dict[str, MetricData], kind: str, ide
                      "this and gives management's explanation, with sources (under half a cent)."):
         return
 
-    with st.spinner("Reading the filing and asking the assistant..."):
+    with st.spinner("Reading the filing and asking the assistant…"):
         passages = []
         for row in filings:
             passages += data.filing_row_passages(data.user_agent(), row, _filing_label(row))

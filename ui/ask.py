@@ -148,14 +148,14 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
     with st.chat_message("user"):
         st.markdown(_escape_dollars(question))
     with st.chat_message("assistant"):
-        progress = st.progress(0.0, text="Reading the filings...")
+        progress = st.progress(0.0, text="Reading the filings…")
         passages = []
         for i, row in enumerate(to_read):
             passages += data.passages(data.user_agent(), row["url"], _filing_label(row),
                                       row["form"], row["period"] or "")
             progress.progress((i + 1) / len(to_read),
                               text=f"Reading the filings ({i + 1} of {len(to_read)}; "
-                                   "saved after the first time)...")
+                                   "saved after the first time)…")
         progress.empty()
         searcher = data.filing_search(company.cik, tuple(r["url"] for r in to_read),
                                       company.fiscal_year_end_month, passages)
@@ -170,7 +170,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
             written.append(chunk)
             live.markdown(_escape_dollars("".join(written)) + " ▌")
 
-        with st.spinner("Thinking..."):
+        with st.spinner("Thinking…"):
             try:
                 answer = ask(api_key, company, question, relevant,
                              dashboard_figures(company, metrics,

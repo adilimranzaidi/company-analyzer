@@ -38,7 +38,8 @@ def render(company: Company, options: list[dict]) -> None:
     table = pd.DataFrame([snapshot_row(label, s) for label, s in snaps.items()])
     table = table.set_index("Company").T
     table.columns = [_short(c) for c in table.columns]
-    st.dataframe(table, width="stretch")
+    st.dataframe(table, width="stretch", column_config={
+        c: st.column_config.TextColumn(alignment="right") for c in table.columns})
     st.caption("Each company's own latest fiscal year (year-ends differ). All figures from "
                "SEC filings; growth rates and ratios calculated in Python.")
 

@@ -702,3 +702,49 @@ flexibility principles.
 - The first menu style applied to every button group on the site; scoped to the main menu.
 - The shell garbled an apostrophe and a line break in a script again; fixed with the Edit tool.
 - 145 tests pass; linter clean; every section opened without errors (AppTest).
+
+---
+
+## Step 6: Polish, with every installed design skill (2026-10-22)
+
+Ran each design skill installed on this computer against the dashboard. ("find-skills" only
+searches for other skills and "synced" is a sync folder, so neither applies.)
+
+**What each one found, and the fix**
+- **web-design-guidelines** (Vercel's interface rules):
+  - Headings skipped a level (page title, then straight to level 3). Sections are now level 2,
+    parts of a section level 3 (the company briefing's headings included).
+  - Loading messages used "..." instead of a real ellipsis "…" (13 places).
+  - Figures used Garamond's default numerals, which vary in width, so columns didn't line up.
+    Figures now use even-height, equal-width numerals.
+  - No visible keyboard focus on headline links; added for links, buttons and the menu.
+  - The company and section weren't in the web address. Now `?ticker=AXP&section=Industry`
+    opens that page directly and can be bookmarked or shared.
+  - The page now tells the browser it's a light page.
+- **design-taste-frontend** (app-screen rules, plus its inspector at phone width):
+  - Key figures were four tinted tiles; now one ruled band split by thin lines, like an
+    annual report's highlights strip, and a 2 x 2 grid on a phone.
+  - The "+10.0% vs. a year ago" pills failed the contrast check (4.3:1, needs 4.5:1); now
+    dark green (or dark red) text with no pill.
+  - The company name was 41px on a phone; app titles stay at 20-32px.
+  - Number columns in every table are right-aligned so digits line up.
+  - Its inspector also flags the warm off-white page colour as "cream"; kept, because it's the
+    paper look chosen for this project.
+- **frontend-design**: solid navy chips in the company pickers put strong colour on controls;
+  now a pale tint. Written text stops at about 80 characters a line.
+- **apple-design** (second pass): buttons now respond the moment they're pressed, with a
+  "reduce motion" fallback.
+
+**What broke / how we fixed it**
+- **The Garamond font sometimes didn't load at all**, and the page fell back to a plain
+  sans-serif (found while checking the numerals: the browser had no Garamond loaded).
+  Streamlit's own theme font loading doesn't always run. The stylesheet now also loads EB
+  Garamond directly, so it can't be skipped.
+- The design inspector can't wait for Streamlit to finish drawing (it measured an empty page
+  at desktop width); its phone-width results were used, plus screenshots.
+- README screenshots: Chrome's simple screenshot mode captured blank pages, and at 1.5x pixel
+  density the charts didn't draw. A small script now waits for the page (and its charts) to
+  finish, at normal density.
+- The app name sat 9px below the search box because of a negative margin Streamlit puts on
+  text blocks; removed for that one element.
+- 3 new tests (148 total); linter clean; every section opened without errors for AXP and AAPL.

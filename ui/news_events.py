@@ -62,7 +62,7 @@ def render(company: Company, metrics: dict[str, MetricData]) -> None:
             "whole market's move that day* (compared with SPY, which tracks the S&P 500), and "
             "by at least 4%. Prices from Tiingo.")
 
-    with st.spinner("Reading 8-K filings and daily prices (first time only)..."):
+    with st.spinner("Reading 8-K filings and daily prices (first time only)…"):
         events, price_note = data.all_events(data.user_agent(), company.cik, company.ticker)
     if price_note:
         setup = (" Sign up free at tiingo.com, then add <code>TIINGO_API_KEY = "

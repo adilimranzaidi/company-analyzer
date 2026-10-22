@@ -42,7 +42,7 @@ def render(company: Company) -> None:
                             unsafe_allow_html=True)
 
     # --- Filters ------------------------------------------------------------------
-    st.subheader("All filings")
+    st.header("All filings")
     c1, c2, c3 = st.columns([3, 1.4, 1.6])
     chosen = c1.multiselect("Types", list(TYPES), default=list(TYPES), key="fl_types")
     span = c2.selectbox("Time range", list(SPANS), index=1, key="fl_span")

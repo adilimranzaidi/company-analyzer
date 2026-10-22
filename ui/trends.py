@@ -14,6 +14,7 @@ from analyzer.glossary import short
 from analyzer.metrics import add_growth, margin_tables, roe_annual, roe_trailing, unusual_changes
 from ui import data
 from ui.explain_ui import explain_box
+from ui.style import number_columns
 from ui.terms import explain
 
 SENSITIVITY = {"High": 2.5, "Medium": 3.0, "Low": 4.0}
@@ -98,8 +99,8 @@ def _metric_chart(md: MetricData, quarterly: bool, years: int, unusual: dict, ke
         t.columns = ["Period", "Period end", "Value", "Source", "Value taken from",
                      "First reported in", "Filing"]
         st.dataframe(t.iloc[::-1], hide_index=True, width="stretch",
-                     column_config={"Filing": st.column_config.LinkColumn(
-                         "Filing", display_text="Open")})
+                     column_config=number_columns(t, {"Filing": st.column_config.LinkColumn(
+                         "Filing", display_text="Open")}))
         if md.choice.passed_over:
             st.markdown("Other EDGAR labels found but not used (less recent data): "
                         + ", ".join(f"`{label}` (to {end})"
@@ -136,7 +137,9 @@ def _financials(shown, metrics, quarterly, years, unusual, company):
                                       if y is not None else "-",
                 "EDGAR label used": md.choice.label,
             })
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        latest = pd.DataFrame(rows)
+        st.dataframe(latest, hide_index=True, width="stretch",
+                     column_config=number_columns(latest))
         for md in (m for m in metrics.values() if not m.available):
             if md.discontinued:
                 st.markdown(f"- **{md.metric.name}**: no longer reported (last data "
@@ -164,11 +167,12 @@ def _growth(shown, metrics, quarterly, years):
         if quarterly:
             row["vs. previous quarter"] = format_pct(last["qoq_growth"])
         rows.append(row)
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
+    growth = pd.DataFrame(rows)
+    st.dataframe(growth, hide_index=True, width="stretch", column_config=number_columns(growth, {
         "vs. a year earlier": st.column_config.TextColumn(help=short("Year-over-year growth")),
         "vs. previous quarter": st.column_config.TextColumn(
             help=short("Quarter-over-quarter growth")),
-    })
+    }))
     st.caption("n/m = not meaningful (the earlier figure was zero, negative or missing).")
 
     charts = [(r.name, r.formula, df) for r, df in margin_tables(metrics, quarterly).values()]
@@ -221,7 +225,7 @@ def _events(events, period, years, sens, company, metrics):
     names = sorted(events["metric"].unique())
     chosen = st.multiselect("Metrics", names, default=names, key="ev_metrics")
     ev = events[events["metric"].isin(chosen)]
-    st.dataframe(pd.DataFrame({
+    changes = pd.DataFrame({
         "Period": ev["period"], "Metric": ev["metric"],
         "Value": [format_value(v, u) for v, u in zip(ev["value"], ev["unit"], strict=True)],
         "A year earlier": [format_value(v, u) for v, u in
@@ -231,8 +235,9 @@ def _events(events, period, years, sens, company, metrics):
         "First reported in": [f"{f} filed {d}" for f, d in
                               zip(ev["orig_form"], ev["orig_filed"], strict=True)],
         "Filing": [index_url(cik, a) for a in ev["orig_accn"]],
-    }), hide_index=True, width="stretch",
-        column_config={"Filing": st.column_config.LinkColumn("Filing", display_text="Open")})
+    })
+    st.dataframe(changes, hide_index=True, width="stretch", column_config=number_columns(
+        changes, {"Filing": st.column_config.LinkColumn("Filing", display_text="Open")}))
     st.caption("\"Typical change\" is the company's median year-over-year change for that "
                "metric. Several metrics flagged in one period usually share one cause, such "
                "as COVID-19 in 2020-21.")
@@ -240,7 +245,7 @@ def _events(events, period, years, sens, company, metrics):
     # --- Explain one change from its filing --------------------------------------------
     if ev.empty:
         return
-    st.subheader("Why did it change?")
+    st.header("Why did it change?")
     labels = [f"{r['period']} · {r['metric']} ({format_pct(r['yoy_growth'])})"
               for _, r in ev.iterrows()]
     picked = st.selectbox("Change to explain", labels, key="explain_change")
