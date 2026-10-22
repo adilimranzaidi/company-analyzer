@@ -31,8 +31,9 @@ that files with the U.S. Securities and Exchange Commission (SEC).
    with numbered, quoted sources (Claude Haiku 5.5 with the Citations feature)
    - 5b. ✅ "Explain from filing": management's own explanation of each unusual change and
      notable event, from the filing that covers it (including 8-K press releases), cited
-   - 5c. Company synopsis: what the company does, its latest quarter, recent 8-K events,
-     key risks and interview talking points, all cited
+   - 5c. ✅ Company synopsis on the Overview: what the company does, how it makes money,
+     its latest quarter, recent events, key risks and interview talking points, all cited
+     and written once per new 10-K or 10-Q
 
 **Version 2: macro layer and segments**
 - Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)

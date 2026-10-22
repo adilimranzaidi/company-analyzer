@@ -595,3 +595,37 @@ answer took ~12s with nothing on screen until the end.
   link them to the stock move ("any link would be my inference").
 - Boeing CEO departure (March 2024): explained from the 8-K and its press release.
 - 7 new tests (138 total); linter clean.
+
+---
+
+## Step 5c: Company synopsis on the Overview (2026-10-22)
+
+**What we did** (`analyzer/synopsis.py`, `ui/overview.py`)
+- The Overview's "About" section now holds a briefing with six headings: what the company
+  does, how it makes money, the latest quarter, recent notable events, key risks, and
+  interview talking points. Every point cites its source.
+- **Where each part comes from:** business and revenue from the latest 10-K's Item 1; risks
+  from Item 1A; the reasons behind the latest results from the newest report's MD&A (Item 2
+  of a 10-Q, or Item 7 of the 10-K when the 10-K is newer); every number and event from the
+  dashboard's own figures, never calculated by the AI.
+- Written only when you press "Write synopsis" (about 25-40 seconds, about 0.6¢), then saved.
+  It is offered again only when the company files a new 10-K or 10-Q.
+- The assistant's length rule can now be swapped per task: short for chat, structured for
+  the synopsis.
+
+**What broke / how we fixed it**
+- Item labels differ: an Item without a title on the same line is labelled "Item 1" (no
+  dot), and "Item 1" must not match "Item 1A" or "Item 10". Fixed with an exact item-number
+  match, covered by tests.
+- The first AmEx draft's talking points were uncited and added one detail not in the
+  quoted text. The instructions now require talking points to reuse facts already stated,
+  with the same sources, and add nothing new.
+- The shell's escaping garbled `\b` and `\n` in a script again; repaired with a separate
+  fix script and checked for control characters.
+
+**Tested on real companies**
+- AmEx (10-K Feb 2026 + 10-Q Jul 2026): segments, revenue model, Q2 2026 drivers (billed
+  business, card fees, reserve release) and risks all matched the cited text. 0.58¢.
+- Microsoft (10-K Jul 2026 is the newest report): used the 10-K's MD&A, noted that Q4 is
+  derived and Q4 EPS isn't, and flagged the OpenAI investment gains in fiscal 2026 profit. 0.55¢.
+- 6 new tests (144 total); linter clean.

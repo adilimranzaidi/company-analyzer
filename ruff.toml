@@ -13,3 +13,4 @@ select = ["E", "W", "F", "I", "B", "UP"]
 # The instructions and methods guide sent to Claude are written one sentence per line;
 # wrapping them for the linter would change the text Claude receives.
 "analyzer/assistant.py" = ["E501"]
+"analyzer/synopsis.py" = ["E501"]

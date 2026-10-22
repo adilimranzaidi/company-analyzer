@@ -56,7 +56,8 @@ its column headings, say the period isn't shown rather than guessing.
 4. General finance concepts (for example, what return on equity means) may be explained from general knowledge. \
 Start such a sentence with "In general," and keep it separate from claims about {ticker}.
 5. No investment advice, price targets or predictions.
-6. Be concise: answer directly first, then up to five short bullet points if useful."""
+6. {length_rule}"""
+CHAT_LENGTH = "Be concise: answer directly first, then up to five short bullet points if useful."
 
 METHODS_GUIDE = """Company Analyzer: how the dashboard's figures are calculated.
 All financial figures come from companies' XBRL-tagged SEC filings (10-K annual reports and 10-Q quarterly reports and their amendments). Numbers tagged in other documents, such as proxy statements or 8-K press releases, are ignored.
@@ -206,7 +207,8 @@ def parse_answer(content, meta: list[dict]) -> tuple[str, str, list[Source]]:
 def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         figures: str, history: list[tuple[str, str]],
         searched: str = "the filings chosen in the dashboard", on_text=None,
-        extra: list[tuple[str, str, str]] | None = None) -> Answer:
+        extra: list[tuple[str, str, str]] | None = None,
+        length_rule: str = CHAT_LENGTH) -> Answer:
     client = anthropic.Anthropic(api_key=api_key)
     docs, meta = build_documents(passages, figures, extra)
     messages = []
@@ -220,7 +222,7 @@ def ask(api_key: str, company: Company, question: str, passages: list[Passage],
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT.format(name=pretty_company_name(company.name), ticker=company.ticker,
-                                    searched=searched),
+                                    searched=searched, length_rule=length_rule),
         messages=messages,
         output_config={"effort": EFFORT},
     ) as stream:

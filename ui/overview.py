@@ -5,13 +5,18 @@ import html
 
 import streamlit as st
 
+from analyzer.assistant import ask, dashboard_figures, friendly_error
 from analyzer.charts import bar_chart, format_pct, format_ratio, format_value
 from analyzer.compare import trailing_roe_latest
-from analyzer.edgar_client import Company
+from analyzer.edgar_client import Company, EdgarError, pretty_company_name
+from analyzer.explain import cache_key, load_saved, save
+from analyzer.filings import latest_reports
 from analyzer.financials import MetricData
 from analyzer.glossary import short
 from analyzer.metrics import add_growth, unusual_changes
+from analyzer.synopsis import LENGTH_RULE, REQUEST, identifier, pick_passages
 from ui import data
+from ui.ask import _filing_label, _show_answer
 from ui.style import placeholder
 
 
@@ -31,13 +36,68 @@ def _figure(md: MetricData | None):
     return last
 
 
+def _synopsis(company: Company, metrics: dict[str, MetricData]) -> None:
+    """The company briefing: shown if already written for the latest filings, otherwise a
+    button that writes it (once per new 10-K or 10-Q, then saved)."""
+    try:
+        reports = latest_reports(data.filings(data.user_agent(), company.cik))
+    except EdgarError:
+        placeholder("The company's filings couldn't be loaded, so there's no synopsis yet.")
+        return
+    annual, quarterly = reports.annual, reports.quarterly
+    if not annual:
+        placeholder("No annual report (10-K) was found, so a synopsis can't be written.")
+        return
+    # The newest periodic report explains the latest results: usually a 10-Q, but right
+    # after the fiscal year ends it's the 10-K itself.
+    recent = quarterly if quarterly and quarterly["filed"] > annual["filed"] else annual
+    key = cache_key(company.cik, "synopsis", identifier(annual["accession"], recent["accession"]))
+
+    saved = load_saved(key)
+    if saved:
+        _show_answer(saved)
+        st.caption(f"Written from the {annual['form']} filed {annual['filed']:%b %d, %Y}"
+                   + (f" and the {recent['form']} filed {recent['filed']:%b %d, %Y}"
+                      if recent is not annual else "")
+                   + ". A new synopsis can be written when the company files its next report.")
+        return
+    st.markdown('<div class="ca-muted">A short briefing on what the company does, how it '
+                "makes money, its latest quarter, recent events, key risks and interview "
+                "talking points, written from its own filings with sources.</div>",
+                unsafe_allow_html=True)
+    if not data.get_secret("ANTHROPIC_API_KEY"):
+        st.caption("Add an Anthropic API key to write the synopsis.")
+        return
+    if not st.button("Write synopsis", key=f"synopsis_{key}",
+                     help="Reads the latest 10-K and 10-Q (about 15 seconds, under 1¢). "
+                          "Saved afterwards, so reopening it is free."):
+        return
+
+    with st.spinner("Reading the latest 10-K and 10-Q and writing the synopsis..."):
+        try:
+            agent = data.user_agent()
+            annual_passages = data.filing_row_passages(agent, annual, _filing_label(annual))
+            recent_passages = (annual_passages if recent is annual else
+                               data.filing_row_passages(agent, recent, _filing_label(recent)))
+            passages = pick_passages(annual_passages, recent_passages)
+            events = data.all_events(agent, company.cik, company.ticker)[0]
+            searched = (f"the {annual['form']} filed {annual['filed']:%b %Y}"
+                        + (f" and the {recent['form']} filed {recent['filed']:%b %Y}"
+                           if recent is not annual else ""))
+            answer = ask(data.get_secret("ANTHROPIC_API_KEY"), company,
+                         REQUEST.format(name=pretty_company_name(company.name)), passages,
+                         dashboard_figures(company, metrics, events), [],
+                         searched=searched, length_rule=LENGTH_RULE)
+        except Exception as err:            # shown to the user, never a crash
+            st.error(friendly_error(err))
+            return
+    save(key, answer)
+    st.rerun()                              # show it the same way a saved synopsis is shown
+
+
 def render(company: Company, metrics: dict[str, MetricData]) -> None:
     st.subheader("About")
-    placeholder(
-        "A plain-English synopsis of what the company does, how it makes money, its "
-        "latest quarter, recent events and key risks, written from its own filings with "
-        "citations, arrives in <b>Step 5c</b>."
-    )
+    _synopsis(company, metrics)
 
     # --- Key figures -------------------------------------------------------
     rev = _figure(metrics.get("revenue"))
