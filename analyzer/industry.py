@@ -51,11 +51,12 @@ MACRO = (
 
 PROFILES = (
     Profile("Oil and gas", "XLE", "Energy Select Sector fund (XLE)", (
-        Indicator("DCOILBRENTEU", "Brent crude oil price", "usd",
-                  "The world price of oil; it sets most of an oil producer's revenue."),
-        Indicator("DCOILWTICO", "WTI crude oil price (US)", "usd",
+        Indicator("DCOILBRENTEU", "Brent crude, spot price", "usd",
+                  "The world price of oil; it sets most of an oil producer's revenue. (Spot is "
+                  "physical oil; the news usually quotes futures, which can differ.)"),
+        Indicator("DCOILWTICO", "WTI crude (US), spot price", "usd",
                   "The US oil price; the gap to Brent matters for US producers and refiners."),
-        Indicator("DHHNGSP", "Natural gas price (Henry Hub)", "usd",
+        Indicator("DHHNGSP", "Natural gas, spot price (Henry Hub)", "usd",
                   "Drives revenue from gas production and costs for refiners and chemicals."),
     ), "oil and gas prices; OPEC+ supply decisions; conflict and shipping in the Middle East "
        "(Strait of Hormuz, Red Sea); sanctions; US tariffs and trade policy and how they affect "
@@ -197,22 +198,28 @@ def fred_series(series: str, api_key: str, years: int = 6) -> pd.DataFrame:
     return df.dropna().reset_index(drop=True)
 
 
+def _frequency(df: pd.DataFrame) -> str:
+    gap = pd.to_datetime(df["date"]).diff().dt.days.median()
+    return "daily" if gap <= 8 else "monthly" if gap <= 45 else "quarterly"
+
+
 def indicator_summary(ind: Indicator, df: pd.DataFrame) -> dict:
-    """Latest value, the change from a year earlier, and a monthly series for a chart.
-    For yoy indicators the shown value IS the year-over-year % change."""
+    """Latest value with its real date, the change from a year earlier, and monthly averages
+    for a chart. For yoy indicators the value IS the % change from a year earlier."""
     if df.empty:
         return {"series": ind.series, "name": ind.name, "error": "No data."}
     s = df.set_index(pd.to_datetime(df["date"]))["value"]
     monthly = s.resample("MS").mean().dropna()
+    freq = _frequency(df)
     if ind.yoy:
-        monthly = (monthly / monthly.shift(12) - 1).dropna() * 100
-        unit = "pct"
+        series = (monthly / monthly.shift(12) - 1).dropna() * 100
+        monthly, unit = series, "pct"
     else:
-        unit = ind.unit
-    if monthly.empty:
+        series, unit = s, ind.unit         # the latest actual reading, not a month's average
+    if series.empty:
         return {"series": ind.series, "name": ind.name, "error": "Not enough data."}
-    last_date, last = monthly.index[-1], float(monthly.iloc[-1])
-    year_ago = monthly[monthly.index <= last_date - pd.DateOffset(months=12)]
+    last_date, last = series.index[-1], float(series.iloc[-1])
+    year_ago = series[series.index <= last_date - pd.DateOffset(years=1)]
     prior = float(year_ago.iloc[-1]) if not year_ago.empty else None
     if prior is None:
         change = None
@@ -223,7 +230,7 @@ def indicator_summary(ind: Indicator, df: pd.DataFrame) -> dict:
     return {"series": ind.series, "name": ind.name + (" (change from a year earlier)"
                                                       if ind.yoy else ""),
             "unit": unit, "why": ind.why, "value": last, "as_of": last_date.date().isoformat(),
-            "change": change,
+            "freq": "monthly" if ind.yoy else freq, "change": change,
             "points": [[d.date().isoformat(), round(float(v), 3)]
                        for d, v in monthly.tail(60).items()],
             "source_url": f"https://fred.stlouisfed.org/series/{ind.series}"}

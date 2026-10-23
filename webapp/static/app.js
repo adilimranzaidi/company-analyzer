@@ -340,15 +340,19 @@ function answerCard(host, ticker, path, { label, note, auto }) {
   }).catch(err => { host.innerHTML = `<div class="error">${esc(err.message)}</div>`; });
 }
 const indValue = (v, unit) => v == null ? "–" : unit === "pct" ? v.toFixed(2) + "%"
-  : unit === "usd" ? "$" + v.toLocaleString("en-US", { maximumFractionDigits: v >= 100 ? 0 : 2 })
+  : unit === "usd" ? "$" + v.toLocaleString("en-US", v >= 100 ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   : v.toLocaleString("en-US", { maximumFractionDigits: 1 });
 const indChange = c => !c || c.value == null ? "" : c.kind === "points"
   ? `${c.value >= 0 ? "+" : "−"}${Math.abs(c.value).toFixed(2)} points in a year`
   : `${c.value >= 0 ? "+" : "−"}${Math.abs(c.value).toFixed(1)}% in a year`;
+// A reading's date the way it's published: "Oct 20, 2026", "Sep 2026", "Q2 2026".
+const periodText = (iso, freq) => { const d = new Date(iso + "T00:00");
+  return freq === "monthly" ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    : freq === "quarterly" ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}` : dateText(iso); };
 const indCard = i => i.error ? "" : `<div class="card" style="padding:14px 16px">
     <div class="faint">${esc(i.name)}</div>
     <div style="font:500 22px var(--display);margin-top:4px">${indValue(i.value, i.unit)}</div>
-    <div class="muted" style="font-size:13px">${indChange(i.change)}${i.change ? " · " : ""}${dateText(i.as_of)}</div>
+    <div class="muted" style="font-size:13px">${indChange(i.change)}${i.change ? " · " : ""}${periodText(i.as_of, i.freq)}</div>
     <svg viewBox="0 0 100 34" preserveAspectRatio="none" style="width:100%;height:34px;margin:6px 0" data-points="${esc(JSON.stringify(i.points.map(p => p[1])))}" aria-hidden="true"></svg>
     <div class="muted" style="font-size:13px">${esc(i.why)}</div>
     <a class="faint" href="${esc(i.source_url)}" target="_blank" rel="noopener">Source: FRED</a></div>`;

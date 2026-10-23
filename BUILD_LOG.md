@@ -901,3 +901,13 @@ sixth and seventh existed; this step adds the other three in a new panel.
 - Design inspector: passes on the Snapshot; on the new panel one "text at the edge" flag is
   the sideways-scrolling tab strip, which is allowed there.
 - 5 new tests (163 total); linter clean.
+
+**Follow-up: indicators live (FRED key added)**
+- All six test industries load their indicators (Exxon, Intel, AmEx, JPMorgan, McDonald's,
+  Apple).
+- Brent showed $124.96 while the news said ~$113. Both were "right": FRED's series is the
+  spot price for physical cargoes (the news quotes futures, which can differ in a supply
+  crunch), and the card showed October's *average*, labelled October 1. Now each card shows
+  the latest actual reading with its real date (Brent spot $115.22 on Oct 20), compared with
+  a year earlier; labels say "spot price"; monthly and quarterly data are dated "Sep 2026" /
+  "Q2 2026". Prices under $100 show two decimals ("$3.10").
