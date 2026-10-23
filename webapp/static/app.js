@@ -602,6 +602,7 @@ function choose(t) { closeAll(); if (pick) { const f = pick; pick = null; f(t); 
 // ---------- Start ----------
 function fromHash() { const [t, p] = decodeURIComponent(location.hash.slice(1)).split("/"); return [t || store.get("last", "AXP"), p || "snapshot"]; }
 addEventListener("hashchange", () => { const [t, p] = fromHash(); if (t.toUpperCase() !== S.ticker) load(t, p); else go(Math.max(0, PANELS.findIndex(x => x.id === p))); });
-requestAnimationFrame(() => { const [t, p] = fromHash(); load(t, p); });
+// Start straight away (not on an animation frame: background tabs don't get frames).
+{ const [t, p] = fromHash(); load(t, p); }
 // Load the company list for search in a quiet moment, so the first search is instant.
 setTimeout(() => (window.requestIdleCallback || (f => f()))(() => loadIndex().catch(() => {})), 2500);
