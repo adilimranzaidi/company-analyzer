@@ -87,3 +87,19 @@ def test_fresh_cache_is_used_without_contacting_the_sec(tmp_path):
 
     client.session.get = fail_if_called
     assert "AXP" in client.ticker_table()
+
+
+def test_merge_facts_keeps_both_histories():
+    from analyzer.edgar_client import merge_facts, predecessor
+    def facts(**labels):
+        return {"facts": {"us-gaap": {k: {"units": {"USD": rows}} for k, rows in labels.items()}}}
+
+    old = facts(Revenues=[{"end": "2024-12-31", "val": 1}])
+    new = facts(Revenues=[{"end": "2026-06-30", "val": 2}],
+                NetIncomeLoss=[{"end": "2026-06-30", "val": 3}])
+    merged = merge_facts(old, new)["facts"]["us-gaap"]
+    assert [r["val"] for r in merged["Revenues"]["units"]["USD"]] == [1, 2]
+    assert merged["NetIncomeLoss"]["units"]["USD"][0]["val"] == 3
+    assert old["facts"]["us-gaap"]["Revenues"]["units"]["USD"] == [{"end": "2024-12-31", "val": 1}]
+    assert predecessor("2115436") == "0000034088"          # ExxonMobil Holdings <- Exxon Mobil
+    assert predecessor("4962") is None

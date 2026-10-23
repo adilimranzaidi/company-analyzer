@@ -811,3 +811,20 @@ The screen was rebuilt as a single web page; all the data, calculation and AI co
   that equity is small after years of buybacks.
 - Bubble chart clipped its top bubbles: the axis now always reaches past the highest value.
 - 7 new tests (155 total); linter clean.
+
+---
+
+## Fix: Exxon showed only two quarters of revenue (2026-10-22)
+
+**Cause:** in 2026 Exxon moved under a new holding company, ExxonMobil Holdings Corp. The
+SEC gave it a new record (CIK 0002115436) and the XOM ticker, but its history stayed on
+the old Exxon Mobil Corp record (CIK 0000034088). The new record had filed one quarterly
+report (Q2 2026 plus Q2 2025 for comparison), so the charts had two quarters.
+
+**Fix:** a short list of known predecessor records (`PREDECESSORS` in
+`analyzer/edgar_client.py`). A company on it gets its predecessor's figures and filings
+combined with its own; where both report the same period, the most recently filed value
+wins (the existing rule). Both dashboards use it. Exxon now has revenue from FY2009 and
+quarters from 2017, and its latest 10-K is found for the briefing and the chat.
+The SEC publishes no "successor of" link, so new cases are added to the list by hand.
+- 1 new test (156 total); linter clean.

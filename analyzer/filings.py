@@ -93,6 +93,16 @@ class LatestReports:
     quarterly: dict | None
 
 
+def company_filings(client, cik: str) -> pd.DataFrame:
+    """filings_table for a company, plus its predecessor's filings when it has moved under
+    a new SEC record (see edgar_client.PREDECESSORS), newest first."""
+    from analyzer.edgar_client import format_cik, predecessor
+    tables = [filings_table(client.submissions(c), c)
+              for c in filter(None, (format_cik(cik), predecessor(cik)))]
+    table = pd.concat([t for t in tables if not t.empty] or tables[:1], ignore_index=True)
+    return table.sort_values("filed", ascending=False).reset_index(drop=True)
+
+
 def filings_table(submissions: dict, cik: str) -> pd.DataFrame:
     """The company's recent 10-K, 10-Q and 8-K filings (and amendments), newest first."""
     recent = submissions.get("filings", {}).get("recent", {})

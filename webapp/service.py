@@ -25,7 +25,7 @@ from analyzer.compare import snapshot
 from analyzer.edgar_client import Company, EdgarClient, EdgarError
 from analyzer.events import Event, build_events
 from analyzer.filing_text import Passage, filing_lines, filing_passages
-from analyzer.filings import filings_table, latest_reports
+from analyzer.filings import company_filings, latest_reports
 from analyzer.financials import MetricData, fiscal_period, load_all_metrics_saved
 from analyzer.news import NewsClient, NewsError, merge_articles
 from analyzer.peers import Peer, competition_text, suggest_peers
@@ -125,7 +125,7 @@ def metrics(ticker: str) -> dict[str, MetricData]:
 @remembered(6 * 3600)
 def filings(ticker: str) -> pd.DataFrame:
     co = company(ticker)
-    return filings_table(edgar().submissions(co.cik), co.cik)
+    return company_filings(edgar(), co.cik)
 
 
 def company_and_metrics(ticker: str):

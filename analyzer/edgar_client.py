@@ -83,6 +83,34 @@ def format_cik(cik: int | str) -> str:
     return str(int(cik)).zfill(10)
 
 
+# When a company moves under a new holding company, the SEC gives the new company a new
+# record (CIK) and its ticker, and the history stays on the old record. ExxonMobil Holdings
+# (2026) had filed one quarterly report, so XOM showed two quarters of revenue.
+# shortcut: a hand-kept list (the SEC publishes no "successor of" link); add a pair when
+# a company's history suddenly starts recently.
+PREDECESSORS = {
+    "0002115436": "0000034088",     # ExxonMobil Holdings Corp <- Exxon Mobil Corp
+}
+
+
+def predecessor(cik: str) -> str | None:
+    return PREDECESSORS.get(format_cik(cik))
+
+
+def merge_facts(old: dict, new: dict) -> dict:
+    """One set of facts from a predecessor's and its successor's. Where both report the
+    same period, the cleaning rules already keep the most recently filed value (the
+    successor's), so rows are simply combined."""
+    merged = {"facts": {}}
+    for source in (old, new):
+        for ns, labels in source.get("facts", {}).items():
+            for label, data in labels.items():
+                target = merged["facts"].setdefault(ns, {}).setdefault(label, {"units": {}})
+                for unit, rows in data.get("units", {}).items():
+                    target["units"].setdefault(unit, []).extend(rows)
+    return merged
+
+
 def format_fiscal_year_end(mmdd: str) -> str:
     """The SEC stores fiscal year end as "MMDD": "1231" -> "December 31"."""
     if not mmdd or len(mmdd) != 4 or not mmdd.isdigit():
@@ -318,20 +346,25 @@ class EdgarClient:
     def facts_version(self, cik: str) -> str | None:
         """When the saved copy of a company's facts was downloaded, or None if there's no
         fresh copy. Tables built from the facts are saved under this, so a new download
-        means they're rebuilt."""
-        cache_file = self.cache_dir / f"companyfacts_{format_cik(cik)}.json"
-        if not cache_file.exists():
-            return None
-        mtime = cache_file.stat().st_mtime
-        if (time.time() - mtime) / 3600 >= COMPANY_FACTS_MAX_AGE_HOURS:
-            return None
-        return str(int(mtime))
+        means they're rebuilt. Covers the predecessor's facts too, when there is one."""
+        versions = []
+        for c in filter(None, (format_cik(cik), predecessor(cik))):
+            cache_file = self.cache_dir / f"companyfacts_{c}.json"
+            if not cache_file.exists():
+                return None
+            mtime = cache_file.stat().st_mtime
+            if (time.time() - mtime) / 3600 >= COMPANY_FACTS_MAX_AGE_HOURS:
+                return None
+            versions.append(str(int(mtime)))
+        return "-".join(versions)
 
     def company_facts(self, cik: str) -> dict:
-        """Every number the company has tagged in its filings (the SEC's "XBRL" data)."""
-        cik = format_cik(cik)
-        return self._get_json(
-            COMPANY_FACTS_URL.format(cik=cik),
-            f"companyfacts_{cik}.json",
-            COMPANY_FACTS_MAX_AGE_HOURS,
-        )
+        """Every number the company has tagged in its filings (the SEC's "XBRL" data),
+        including its predecessor's history when it has moved under a new SEC record."""
+        facts = self._facts(format_cik(cik))
+        old = predecessor(cik)
+        return merge_facts(self._facts(old), facts) if old else facts
+
+    def _facts(self, cik: str) -> dict:
+        return self._get_json(COMPANY_FACTS_URL.format(cik=cik), f"companyfacts_{cik}.json",
+                              COMPANY_FACTS_MAX_AGE_HOURS)
