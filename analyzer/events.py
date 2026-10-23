@@ -34,6 +34,16 @@ EVENT_ITEMS = {
 }
 OFFICER_ITEM = "5.02"
 
+# Item names that are too generic to stand alone, so the 8-K's own words are read and the
+# first real sentence about the item is shown as evidence. (Exxon's 2026 move to a new
+# holding company was filed under 2.01 "acquisition or sale" and 3.01 "listing".)
+READ_ITEMS = {"2.01", "3.01", "5.01", "1.02"}
+# A company moving under a new parent or a new state of incorporation. One such 8-K ticks
+# several item boxes; it's shown as one event in its own words instead.
+REORGANIZATION = r"redomicil|reincorporat|holding company reorganization"
+# Sentences that only point elsewhere ("The information set forth in ... is incorporated").
+POINTER = r"incorporated (?:herein )?by reference|set forth (?:in|under|above|below)"
+
 # Senior company-wide roles, most senior first. ("President" is left out: it appears in
 # many divisional titles such as "Vice President and Chief Accounting Officer".)
 ROLES = [
@@ -69,6 +79,38 @@ def item_events(items: str) -> list[tuple[str, str, str]]:
     """Serious event types listed in an 8-K's item codes (excluding 5.02, read separately)."""
     codes = [c.strip() for c in (items or "").split(",")]
     return [EVENT_ITEMS[c] for c in codes if c in EVENT_ITEMS]
+
+
+def _sentences(text: str) -> list[str]:
+    return [x.strip(" |") for x in re.split(r"(?<=[.;])\s+(?=[A-Z“\"(])", text)]
+
+
+def reorganization(lines: list[str]) -> str | None:
+    """The sentence describing a reorganization under a new parent company or state of
+    incorporation, or None."""
+    for sentence in _sentences(" ".join(line for line in lines if " | " not in line)):
+        if 40 < len(sentence) < 600 and re.search(REORGANIZATION, sentence, re.IGNORECASE):
+            return sentence
+    return None
+
+
+def item_evidence(lines: list[str], code: str) -> str:
+    """The first real sentence under an item heading ("Item 2.01 ..."), skipping the heading
+    itself and sentences that only point to another section. "" if none."""
+    text = " ".join(lines)
+    m = re.search(rf"Item\s+{re.escape(code)}(?!\d)", text)
+    if not m:
+        return ""
+    section = text[m.end():m.end() + 3000]
+    # Stop at the next item's heading (not a mention like "set forth in Item 1.01").
+    nxt = re.search(r"(?<!in )(?<!under )(?<!of )(?<!to )Item\s+\d\.\d\d", section)
+    for sentence in _sentences(section[:nxt.start()] if nxt else section)[:8]:
+        sentence = sentence.strip(" |.")
+        words = sentence.split()
+        heading = len(words) <= 10 and sum(w[:1].isupper() for w in words) >= len(words) * .5
+        if len(sentence) > 40 and not heading and not re.search(POINTER, sentence, re.IGNORECASE):
+            return sentence[:400]
+    return ""
 
 
 def _company_role(sentence: str, m: re.Match) -> bool:
@@ -123,19 +165,33 @@ def officer_change(lines: list[str]) -> tuple[str, str, str] | None:
 def build_events(filings: pd.DataFrame, read_lines, since: date) -> list[Event]:
     """Notable events from the company's 8-Ks since a date, newest first.
 
-    read_lines(url) -> list[str] fetches an 8-K's text; it's only called for 5.02 filings.
+    read_lines(url) -> list[str] fetches an 8-K's text; it's only called for filings whose
+    item codes need their own words (5.02 and READ_ITEMS).
     """
     events: list[Event] = []
     eight_ks = filings[filings["form"].isin(["8-K", "8-K/A"]) & (filings["filed"] >= since)]
     for _, row in eight_ks.iterrows():
-        for category, title, severity in item_events(row["items"]):
-            events.append(Event(row["filed"], category, title, severity, "", row["url"],
-                                row["form"]))
-        if OFFICER_ITEM in [c.strip() for c in (row["items"] or "").split(",")]:
+        codes = [c.strip() for c in (row["items"] or "").split(",")]
+        lines: list[str] = []
+        if OFFICER_ITEM in codes or READ_ITEMS & set(codes):
             try:
-                change = officer_change(read_lines(row["url"]))
+                lines = read_lines(row["url"])
             except Exception:          # an unreadable filing shouldn't hide the others
-                change = None
+                lines = []
+        reorg = reorganization(lines) if READ_ITEMS & set(codes) else None
+        if reorg:
+            events.append(Event(row["filed"], "Reorganization",
+                                "Reorganized under a new parent company (not an acquisition)",
+                                "medium", reorg[:400], row["url"], row["form"]))
+            continue                   # its other item boxes describe the same move
+        for code in codes:
+            if code in EVENT_ITEMS:
+                category, title, severity = EVENT_ITEMS[code]
+                evidence = item_evidence(lines, code) if code in READ_ITEMS else ""
+                events.append(Event(row["filed"], category, title, severity, evidence,
+                                    row["url"], row["form"]))
+        if OFFICER_ITEM in codes:
+            change = officer_change(lines) if lines else None
             if change:
                 category, title, evidence = change
                 events.append(Event(row["filed"], category, title, "medium",

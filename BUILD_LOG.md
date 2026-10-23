@@ -828,3 +828,20 @@ wins (the existing rule). Both dashboards use it. Exxon now has revenue from FY2
 quarters from 2017, and its latest 10-K is found for the briefing and the chat.
 The SEC publishes no "successor of" link, so new cases are added to the list by hand.
 - 1 new test (156 total); linter clean.
+
+---
+
+## Fix: a reorganization shown as an "acquisition" (2026-10-22)
+
+**Reported:** Exxon's events said "Completed an acquisition or sale of assets" on July 1,
+2026, which isn't what happened. The 8-K was filed under SEC item 2.01 (acquisitions) and
+3.01 (listing), but described Exxon moving under a new Texas holding company, shares
+swapped one-for-one. The dashboard showed the SEC's generic item names with no context.
+
+**Fix** (`analyzer/events.py`): for items whose names are too generic (2.01, 3.01, 5.01,
+1.02) the 8-K's own text is read. A reorganization ("redomiciliation", "reincorporation",
+"holding company reorganization") becomes one event, "Reorganized under a new parent
+company (not an acquisition)", quoting the filing. Other items now quote the first real
+sentence under their heading (e.g. "consummated the previously announced acquisition of
+Pioneer Natural Resources"). Checked on Exxon and Microsoft filings.
+- 2 new tests (158 total); linter clean.

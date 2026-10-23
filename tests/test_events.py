@@ -50,7 +50,7 @@ def test_biographies_divisions_and_reporting_lines_are_not_events():
         assert officer_change([sentence]) is None, sentence
 
 
-def test_build_events_reads_only_executive_change_filings_and_sorts_newest_first():
+def test_build_events_reads_only_filings_that_need_their_words_and_sorts_newest_first():
     filings = pd.DataFrame([
         {"form": "8-K", "filed": date(2024, 3, 25), "items": "5.02,9.01", "url": "u1"},
         {"form": "8-K", "filed": date(2024, 11, 20), "items": "3.01", "url": "u2"},
@@ -65,7 +65,28 @@ def test_build_events_reads_only_executive_change_filings_and_sorts_newest_first
         return ["Mr. Smith will retire as Chief Financial Officer of the Company."]
 
     events = build_events(filings, read_lines, since=date(2021, 1, 1))
-    assert read == ["u1"]                                  # only the 5.02 filing was read
+    assert read == ["u1", "u2"]           # 5.02 and 3.01 are read; 2.02 (results) isn't
     assert [e.date for e in events] == [date(2024, 11, 20), date(2024, 3, 25)]
     assert events[0].category == "Listing" and events[0].severity == "high"
     assert events[1].title == "Chief Financial Officer departure announced"
+
+
+def test_reorganization_filing_becomes_one_event_in_its_own_words():
+    filings = pd.DataFrame([{"form": "8-K", "filed": date(2026, 7, 1), "items": "2.01,3.01,5.02",
+                             "url": "u"}])
+    text = ["Item 2.01 | Completion of Acquisition or Disposition of Assets.",
+            "On July 1, 2026, the Company completed its previously announced redomiciliation "
+            "merger, and each share was exchanged for one share of the new holding company.",
+            "Mr. Smith was appointed Chief Executive Officer of the new holding company."]
+    events = build_events(filings, lambda url: text, since=date(2026, 1, 1))
+    assert [e.category for e in events] == ["Reorganization"]
+    assert "redomiciliation" in events[0].evidence
+
+
+def test_item_evidence_skips_heading_and_pointer_sentences():
+    from analyzer.events import item_evidence
+    lines = ["Item 2.01 | Completion of Acquisition or Disposition of Assets.",
+             "The information set forth in Item 1.01 is incorporated by reference into this Item.",
+             "On May 3, 2026, the Company completed its acquisition of Acme Corp for $1.2 billion."]
+    assert item_evidence(lines, "2.01").startswith("On May 3, 2026, the Company completed")
+    assert item_evidence(lines, "3.01") == ""
