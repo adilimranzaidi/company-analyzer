@@ -14,6 +14,7 @@ from analyzer.edgar_client import pretty_company_name
 from analyzer.filings import FORM_NAMES, index_url, latest_reports
 from analyzer.financials import MetricData
 from analyzer.glossary import GLOSSARY
+from analyzer.industry import MACRO, FredError, fred_series, indicator_summary, profile_for
 from analyzer.metrics import add_growth, margin_tables, roe_annual, roe_trailing, unusual_changes
 from webapp import service
 
@@ -362,3 +363,63 @@ def filings_payload(ticker: str) -> dict:
 
 def glossary_payload() -> dict:
     return GLOSSARY
+
+
+# ---------------------------------------------------------------------------
+# Industry and world: sector performance and the indicators that drive the industry
+# ---------------------------------------------------------------------------
+
+def _performance(ticker: str, fund: str) -> dict:
+    """The stock against its sector fund and the S&P 500: total returns (dividends
+    included) over 1 and 5 years, and weekly lines rebased to 100, all calculated here."""
+    names = {ticker: ticker, fund: fund, "SPY": "S&P 500 (SPY)"}
+    futures = {t: service.POOL.submit(service.daily, t) for t in dict.fromkeys(names)}
+    lines, returns, note = {}, {}, ""
+    for t, f in futures.items():
+        try:
+            df = f.result()
+        except service.PriceError as err:
+            note = str(err)
+            continue
+        if df.empty:
+            continue
+        s = df.set_index(pd.to_datetime(df["date"]))["adj_close"]
+        weekly = s.resample("W-FRI").last().dropna()
+        last_day = s.index[-1]
+        # Each line starts at 100 on the same day the return is measured from, so the line's
+        # end and the return in the table always agree.
+        lines[t], returns[t] = {}, {}
+        for label, years in (("1y", 1), ("5y", 5)):
+            cutoff = last_day - pd.DateOffset(years=years)
+            past = s[s.index <= cutoff]
+            if past.empty:
+                returns[t][label] = None
+                continue
+            base = past.iloc[-1]
+            returns[t][label] = num(s.iloc[-1] / base - 1)
+            window = weekly[weekly.index > cutoff]
+            lines[t][label] = [[cutoff.date().isoformat(), 100.0]] + [
+                [d.date().isoformat(), round(float(v / base * 100), 2)] for d, v in window.items()]
+    return {"names": names, "lines": lines, "returns": returns, "note": note}
+
+
+@service.remembered(3600)
+def industry_payload(ticker: str) -> dict:
+    co = service.company(ticker)
+    prof = profile_for(co.sic_code)
+    key = service.secret("FRED_API_KEY")
+    wanted = list({i.series: i for i in prof.indicators + MACRO}.values())
+    futures = [(i, service.POOL.submit(fred_series, i.series, key)) for i in wanted]
+    indicators, fred_note = [], ""
+    for ind, f in futures:
+        try:
+            summary = indicator_summary(ind, f.result())
+        except FredError as err:
+            fred_note = str(err)
+            continue
+        summary["macro"] = ind in MACRO and ind not in prof.indicators
+        indicators.append(summary)
+    return {"industry": prof.name, "sec_industry": co.industry, "fund": prof.sector_etf,
+            "fund_name": prof.sector_name, "topics": prof.topics,
+            "performance": _performance(ticker, prof.sector_etf),
+            "indicators": indicators, "fred_note": fred_note}

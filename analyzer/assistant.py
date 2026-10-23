@@ -261,6 +261,89 @@ def ask(api_key: str, company: Company, question: str, passages: list[Passage],
     return Answer(text or "(No answer was returned.)", sources, cost, note, plain)
 
 
+# ---------------------------------------------------------------------------
+# Today's industry update: current events from a web search, every point cited
+# ---------------------------------------------------------------------------
+
+# The basic web search tool: the newer version (with filtering) isn't available for Haiku.
+WEB_SEARCH = {"type": "web_search_20250305", "name": "web_search", "max_uses": 6}
+SEARCH_PRICE = 0.01           # US$ per web search ($10 per 1,000)
+
+UPDATE_PROMPT = """Today is {today}. Brief someone preparing for a finance job interview about {name} ({ticker}), which is in the {industry} industry ({sec_industry}).
+Search the web for the most important events and trends of the last 30 days affecting this industry and company. Look into: {topics}.
+You have 6 searches; plan them so none is wasted, roughly one each for: news about {name} this month; the biggest industry story; policy, trade and tariffs for this industry; the economy as it affects this industry; competitors at home and abroad; one more for the most important gap. Search using the name "{name}" (and the ticker {ticker}), which is how the news refers to the company.
+Use exactly these Markdown headings, each followed by 2-4 short bullet points:
+### What's moving the industry now
+### Policy, trade and the economy
+### Competitors, at home and abroad
+### What it could mean for {name}
+Rules:
+1. Every fact must come from a search result and be cited. Say when each event happened.
+2. Use numbers only as the sources report them. Never calculate, estimate or round figures yourself.
+3. Mark forecasts and opinions as such ("analysts at X expect ...").
+4. If sources disagree, say so. If you found nothing reliable for a heading, write "Nothing reliable found in this search."
+5. Prefer established news outlets and official sources over press releases and blogs.
+6. Under the last heading, connect the events to {name} only as far as the sources support; start any reasoning of your own with "In general,".
+7. Plain English, no jargon without a short definition. No investment advice."""
+
+
+def industry_update(api_key: str, company: Company, industry: str, sec_industry: str,
+                    topics: str, today: str, on_text=None, common_name: str = "") -> Answer:
+    """A cited briefing on current events in the company's industry, from a web search."""
+    client = _anthropic().Anthropic(api_key=api_key)
+    # The short brand name the news uses ("Exxonmobil", not "ExxonMobil Holdings Corp").
+    prompt = UPDATE_PROMPT.format(today=today, name=common_name or pretty_company_name(company.name),
+                                  ticker=company.ticker, industry=industry,
+                                  sec_industry=sec_industry, topics=topics)
+    messages = [{"role": "user", "content": prompt}]
+    content, cost, stop = [], 0.0, None
+    for _ in range(3):              # a long search can pause; resume it up to twice
+        with client.messages.stream(model=MODEL, max_tokens=MAX_TOKENS, tools=[WEB_SEARCH],
+                                    messages=messages, output_config={"effort": EFFORT}) as stream:
+            for chunk in stream.text_stream:
+                if on_text:
+                    on_text(chunk)
+            response = stream.get_final_message()
+        usage = response.usage
+        searches = getattr(getattr(usage, "server_tool_use", None), "web_search_requests", 0) or 0
+        cost += (usage.input_tokens * PRICE_IN + usage.output_tokens * PRICE_OUT) / 1_000_000 \
+            + searches * SEARCH_PRICE
+        content += list(response.content)
+        stop = response.stop_reason
+        if stop != "pause_turn":
+            break
+        messages = [messages[0], {"role": "assistant", "content": response.content}]
+    if stop == "refusal":
+        return Answer("The update couldn't be written: the request was declined by Claude's "
+                      "safety checks. Try again later.", cost=cost)
+    text, plain, sources = parse_web_answer(content)
+    note = "The update was cut off at the length limit." if stop == "max_tokens" else ""
+    return Answer(text or "(No update was returned.)", sources, cost, note, plain)
+
+
+def parse_web_answer(content) -> tuple[str, str, list[Source]]:
+    """Join the text, adding [n] after each cited passage; one numbered source per web page."""
+    numbered: dict[str, Source] = {}
+    marked, plain = [], []
+    for block in content:
+        if getattr(block, "type", "") != "text":
+            continue
+        marked.append(block.text)
+        plain.append(block.text)
+        refs = []
+        for c in getattr(block, "citations", None) or []:
+            if getattr(c, "type", "") != "web_search_result_location":
+                continue
+            if c.url not in numbered:
+                numbered[c.url] = Source(len(numbered) + 1, c.title or c.url,
+                                         c.cited_text or "", c.url)
+            if numbered[c.url].number not in refs:
+                refs.append(numbered[c.url].number)
+        if refs:
+            marked.append("".join(f" [{n}]" for n in refs))
+    return "".join(marked).strip(), "".join(plain).strip(), list(numbered.values())
+
+
 def search_query(question: str, history: list[tuple[str, str]]) -> str:
     """Follow-ups like "why?" need the previous question's words to find passages."""
     previous = history[-1][0] if history else ""

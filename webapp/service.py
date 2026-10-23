@@ -197,11 +197,16 @@ def logo(ticker: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 @remembered(3600)
+def daily(ticker: str) -> pd.DataFrame:
+    """Daily prices for the last few years (a stock or a fund). Raises PriceError."""
+    # A few extra days, so a full 5-year return can always be measured.
+    start = date.today() - timedelta(days=round(365.25 * PRICE_YEARS) + 10)
+    return PriceClient(secret("TIINGO_API_KEY")).daily(ticker, start)
+
+
 def prices(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(stock, market) daily prices for the last few years. Raises PriceError."""
-    client = PriceClient(secret("TIINGO_API_KEY"))
-    start = date.today() - timedelta(days=round(365.25 * PRICE_YEARS))
-    futures = [POOL.submit(client.daily, t, start) for t in (ticker, MARKET)]
+    """(stock, market) daily prices, fetched side by side. Raises PriceError."""
+    futures = [POOL.submit(daily, t) for t in (ticker, MARKET)]
     return futures[0].result(), futures[1].result()
 
 

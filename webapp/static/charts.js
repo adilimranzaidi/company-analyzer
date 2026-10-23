@@ -307,3 +307,50 @@ export function bubbles(host, tip, rows, opts) {
   api.set(rows);
   return api;
 }
+
+// Several lines on one time axis, each starting at 100 (calculated in Python), with the
+// name and level at each line's end. series: [{name, color, points: [[ms, value]]}]
+export function compareChart(host, tip) {
+  const svg = el("svg", { role: "img", "aria-label": "Performance compared" }, host);
+  let series = [], cancel = () => {};
+  function draw(progress = 1) {
+    const r = host.getBoundingClientRect(), w = r.width, h = r.height;
+    if (!w || !series.length) return;
+    const g = { l: 46, r: Math.min(150, w * .2), t: 14, b: 28 };
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.textContent = "";
+    const all = series.flatMap(s => s.points), t0 = Math.min(...all.map(p => p[0])), t1 = Math.max(...all.map(p => p[0]));
+    const vals = all.map(p => p[1]), ticks = niceTicks(Math.min(...vals, 100), Math.max(...vals, 100), 4);
+    const lo = ticks[0], hi = ticks.at(-1);
+    const x = t => g.l + (t - t0) / (t1 - t0 || 1) * (w - g.l - g.r), y = v => g.t + (1 - (v - lo) / (hi - lo)) * (h - g.t - g.b);
+    const faint = css("--faint");
+    ticks.forEach(v => { el("line", { x1: g.l, x2: w - g.r, y1: y(v), y2: y(v), stroke: v === 100 ? css("--line-2") : css("--line"), "stroke-dasharray": v === 100 ? "4 4" : "" }, svg);
+      el("text", { x: g.l - 8, y: y(v) + 4, "text-anchor": "end", fill: faint, "font-size": 11 }, svg).textContent = v; });
+    const years = (t1 - t0) / 3.156e10, d = new Date(t0); d.setDate(1); d.setMonth(d.getMonth() + 1);
+    for (; d.getTime() <= t1; d.setMonth(d.getMonth() + (years > 2 ? 12 : 2))) {
+      if (years > 2 && d.getMonth() !== 0) { d.setMonth(0); d.setFullYear(d.getFullYear() + 1); if (d.getTime() > t1) break; }
+      el("text", { x: x(d.getTime()), y: h - 8, "text-anchor": "middle", fill: faint, "font-size": 11 }, svg).textContent =
+        years > 2 ? String(d.getFullYear()) : d.toLocaleString("en-US", { month: "short" });
+    }
+    const ends = [];
+    series.forEach(s => {
+      const pts = s.points.map(([t, v]) => [x(t), y(v)]);
+      const ln = el("path", { d: straightPath(pts), fill: "none", stroke: s.color, "stroke-width": s.main ? 2.6 : 1.8, opacity: s.main ? 1 : .85, "stroke-linejoin": "round" }, svg);
+      if (progress < 1) { const L = ln.getTotalLength(); ln.style.strokeDasharray = L; ln.style.strokeDashoffset = L * (1 - progress); }
+      ends.push({ s, x: pts.at(-1)[0], y: pts.at(-1)[1], v: s.points.at(-1)[1] });
+    });
+    if (progress >= 1) {           // end labels, nudged apart so they don't overlap
+      ends.sort((a, b) => a.y - b.y).forEach((e, i, arr) => { if (i && e.y - arr[i - 1].ly < 16) e.ly = arr[i - 1].ly + 16; else e.ly = e.y;
+        el("circle", { cx: e.x, cy: e.y, r: 3.5, fill: e.s.color }, svg);
+        el("text", { x: e.x + 8, y: e.ly + 4, fill: e.s.color, "font-size": 12, "font-family": "Sora" }, svg).textContent = `${e.s.name} ${Math.round(e.v)}`; });
+    }
+    const cross = el("line", { y1: g.t, y2: h - g.b, stroke: css("--line-2"), "stroke-dasharray": "3 4", opacity: 0, "pointer-events": "none" }, svg);
+    svg.onpointermove = ev => { const rr = svg.getBoundingClientRect(), t = t0 + (ev.clientX - rr.left - g.l) / (w - g.l - g.r) * (t1 - t0);
+      const rows = series.map(s => { let best = s.points[0]; for (const p of s.points) if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p; return [s, best]; });
+      const at = rows[0][1][0]; cross.setAttribute("x1", x(at)); cross.setAttribute("x2", x(at)); cross.setAttribute("opacity", 1);
+      tipAt(tip, x(at), g.t + 20, `${new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` +
+        rows.map(([s, p]) => `<br><span style="color:${s.color}">${s.name}</span> ${p[1].toFixed(0)}`).join("")); };
+    svg.onpointerleave = () => { cross.setAttribute("opacity", 0); tip.style.opacity = 0; };
+  }
+  watch(host, () => draw());
+  return { set(next) { series = next; cancel(); cancel = tween(900, p => draw(p)); } };
+}

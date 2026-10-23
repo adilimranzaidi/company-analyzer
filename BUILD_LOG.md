@@ -845,3 +845,59 @@ company (not an acquisition)", quoting the filing. Other items now quote the fir
 sentence under their heading (e.g. "consummated the previously announced acquisition of
 Pioneer Natural Resources"). Checked on Exxon and Microsoft filings.
 - 2 new tests (158 total); linter clean.
+
+---
+
+## Step 8: Industry and world (2026-10-22)
+
+**Asked for:** the dashboard should explain a company's situation, not just its numbers:
+big financials, industry performance, industry drivers, current events and macro trends,
+big company events, explanations for unusual events, and definitions. The first, fifth,
+sixth and seventh existed; this step adds the other three in a new panel.
+
+**What we did**
+- `analyzer/industry.py`: an industry profile from the SEC industry code: sector fund (for
+  example XLE for oil and gas, SOXX for chips), the economic indicators that drive it
+  (Brent and WTI oil, natural gas, chip production, card delinquencies, rates...), and the
+  topics worth watching (Middle East shipping, OPEC+, tariffs, Chinese chipmakers...). FRED
+  data is fetched with a free key, saved for 12 hours, and every change is calculated here.
+- Industry performance (Python): total return with dividends over 1 and 5 years for the
+  stock, its sector fund and the S&P 500, and lines starting at 100 for a comparison chart.
+- Drivers in the company's own words: the AI reads the 10-K's risk factors, market risk and
+  management's discussion, and lists the 4-6 outside forces that drive results, cited.
+  Written automatically once per 10-K (under 1¢), then saved.
+- "What's happening now": a cited news summary from Claude's web search (headings: what's
+  moving the industry, policy and trade, competitors at home and abroad, what it could mean
+  for the company). Only on request, saved for the day. Rules: every fact cited and dated,
+  numbers only as sources report them, forecasts and opinions labelled, disagreements shown.
+
+**Checked on real companies**
+- Exxon drivers (0.40¢): commodity prices, OPEC+ supply, AI data-centre demand, rates,
+  2025 tariffs (Exxon expects no material near-term impact), climate policy, Kazakhstan.
+- Exxon news: Brent at $113 (highest since May), tanker attacks near the Strait of Hormuz,
+  Houthi strikes on Saudi targets, Russia sanctions waiver, OPEC+ cuts and the UAE's exit.
+- Intel news (7.25¢): China's new export restrictions, Taiwan aligning with US chip controls,
+  the US-China tariff truce, how far SMIC and Huawei have caught up (sources disagree: one
+  says SMIC is 3-5 years behind TSMC, another claims 5nm-class output at much lower yields).
+
+**What broke / how we fixed it**
+- **The cost was double my estimate.** The first Exxon update cost 6.0¢, not ~3¢: each web
+  search is 1¢ and search results add reading costs. It also ran out of searches. Now: 6
+  searches planned one per topic, and the button says "about 6-7¢".
+- **Searching the wrong name.** It searched for "ExxonMobil Holdings Corp" (the new legal
+  name), which news articles don't use. It now searches the short brand name ("Exxonmobil").
+- **The newer web search tool returned nothing on Haiku**, quietly (errors come back inside
+  the answer). The basic tool works and is used.
+- **FRED's keyless download blocks automated requests** (it timed out), so a free key is
+  needed. Until it's added, the panel says so and the rest still works.
+- **The 5-year S&P return was missing**: its prices started exactly five years ago, a day
+  short. Prices now include ten extra days.
+- **Chart line ends didn't match the table** (Intel 223 vs +131.6%): the line started from
+  the first weekly price, the table from the exact price a year earlier. Both now start
+  from the same price.
+- **"Font" shorthands reset equal-width digits** on big numbers; fixed for every element.
+- The header's "+55% over the last year" (share price) vs the panel's +60% (with dividends)
+  looked contradictory; the header now says "share price".
+- Design inspector: passes on the Snapshot; on the new panel one "text at the edge" flag is
+  the sideways-scrolling tab strip, which is allowed there.
+- 5 new tests (163 total); linter clean.

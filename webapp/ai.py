@@ -9,9 +9,15 @@ Each job reports progress through send(kind, **data):
 """
 
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 
-from analyzer.assistant import ask, dashboard_figures, friendly_error, search_query
+from analyzer.assistant import (
+    ask,
+    dashboard_figures,
+    friendly_error,
+    industry_update,
+    search_query,
+)
 from analyzer.charts import format_pct
 from analyzer.explain import (
     cache_key,
@@ -27,6 +33,7 @@ from analyzer.explain import (
 from analyzer.filings import latest_reports
 from analyzer.financials import fiscal_period
 from analyzer.metrics import unusual_changes
+from analyzer.peers import brand_name
 from analyzer.search import choose_filings
 from analyzer.synopsis import LENGTH_RULE, REQUEST, identifier, pick_passages
 from webapp import service
@@ -194,4 +201,112 @@ def ask_question(ticker: str, question: str, history: list[tuple[str, str]], sen
     send("status", message="Thinking…")
     answer = ask(_key(), co, question, searcher.search(query), _figures(ticker), history,
                  searched=searcher.coverage(), on_text=lambda chunk: send("text", chunk=chunk))
+    send("answer", answer=_answer_json(answer, False))
+
+
+# ---------------------------------------------------------------------------
+# Industry drivers, in the company's own words (latest 10-K)
+# ---------------------------------------------------------------------------
+
+DRIVERS_REQUEST = """Which outside forces drive {name}'s results, according to its latest 10-K?
+Use one Markdown heading per driver ("### " and a short plain-English name), 4 to 6 drivers, most important first. Under each heading, 2-3 short bullet points:
+- how it affects revenue, costs or profit, and in which direction;
+- what the company says about it now (for example a price level, a policy, a competitor).
+Only outside forces: prices, demand, interest rates, regulation, trade and tariffs, competition, geopolitics, technology, weather. Not the company's own decisions.
+Use only the 10-K passages and cite every point. If the 10-K doesn't cover something, leave it out rather than guess."""
+
+DRIVERS_LENGTH = "Be compact: the requested headings with 2-3 short bullet points each."
+DRIVER_WORDS = ("prices demand competition regulation tariffs trade interest rates economic "
+                "conditions geopolitical supply market risk factors affect results")
+
+
+def _drivers_sources(ticker: str):
+    annual = latest_reports(service.filings(ticker)).annual
+    if not annual:
+        return None, None
+    return annual, cache_key(service.company(ticker).cik, "drivers", annual["accession"])
+
+
+def drivers_status(ticker: str) -> dict:
+    annual, key = _drivers_sources(ticker)
+    if not annual:
+        return {"available": False, "reason": "No annual report (10-K) was found."}
+    saved = load_saved(key)
+    return {"available": True, "based_on": f"{annual['form']} filed {annual['filed']:%b %d, %Y}",
+            "answer": _answer_json(saved, True) if saved else None,
+            "can_write": bool(service.secret("ANTHROPIC_API_KEY"))}
+
+
+def _driver_passages(passages: list) -> list:
+    """The parts of a 10-K that discuss outside forces: risk factors (1A), market risk (7A),
+    management's discussion (7) and the business overview (1)."""
+    from analyzer.search import BM25
+    from analyzer.synopsis import in_item
+    chosen = []
+    for item, k in (("1A", 6), ("7A", 3), ("7", 5), ("1", 3)):
+        pool = [p for p in passages if in_item(p.section, item)]
+        if pool:
+            scores = BM25([f"{p.section}\n{p.text}" for p in pool]).scores(DRIVER_WORDS)
+            best = sorted(range(len(pool)), key=lambda i: scores[i], reverse=True)[:k]
+            chosen += [pool[i] for i in sorted(best)]
+    return chosen
+
+
+def write_drivers(ticker: str, send) -> None:
+    annual, key = _drivers_sources(ticker)
+    if not annual:
+        send("error", message="No annual report (10-K) was found.")
+        return
+    saved = load_saved(key)
+    if saved:
+        send("answer", answer=_answer_json(saved, True))
+        return
+    send("status", message=f"Reading the {annual['form']}…")
+    co = service.company(ticker)
+    passages = _driver_passages(service.row_passages(annual))
+    send("status", message="Finding the drivers…")
+    answer = ask(_key(), co, DRIVERS_REQUEST.format(name=co.name), passages, _figures(ticker), [],
+                 searched=f"the {annual['form']} filed {annual['filed']:%b %Y}",
+                 length_rule=DRIVERS_LENGTH, on_text=lambda chunk: send("text", chunk=chunk))
+    save(key, answer)
+    send("answer", answer=_answer_json(answer, False))
+
+
+# ---------------------------------------------------------------------------
+# Today's industry update (web search), saved for the day
+# ---------------------------------------------------------------------------
+
+def _update_key(ticker: str, day: date) -> str:
+    return cache_key(service.company(ticker).cik, "industry_update", day.isoformat())
+
+
+def update_status(ticker: str) -> dict:
+    """Today's update if written; otherwise the most recent one from the last two weeks."""
+    today = date.today()
+    for back in range(15):
+        day = today - timedelta(days=back)
+        saved = load_saved(_update_key(ticker, day))
+        if saved:
+            return {"answer": _answer_json(saved, True), "date": day.isoformat(),
+                    "is_today": back == 0, "can_write": bool(service.secret("ANTHROPIC_API_KEY"))}
+    return {"answer": None, "date": None, "is_today": False,
+            "can_write": bool(service.secret("ANTHROPIC_API_KEY"))}
+
+
+def write_update(ticker: str, send) -> None:
+    from webapp.payloads import industry_payload
+    today = date.today()
+    key = _update_key(ticker, today)
+    saved = load_saved(key)
+    if saved:
+        send("answer", answer=_answer_json(saved, True))
+        return
+    ind = industry_payload(ticker)
+    send("status", message="Searching the news…")
+    answer = industry_update(_key(), service.company(ticker), ind["industry"],
+                             ind["sec_industry"], ind["topics"], f"{today:%B %d, %Y}",
+                             on_text=lambda chunk: send("text", chunk=chunk),
+                             common_name=brand_name(service.company(ticker).name))
+    if answer.sources:              # an update with no sources isn't worth keeping
+        save(key, answer)
     send("answer", answer=_answer_json(answer, False))

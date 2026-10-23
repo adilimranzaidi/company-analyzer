@@ -52,8 +52,11 @@ Built with Python (data and calculations) and a hand-built web page (no front-en
    guidelines, app-screen typography and layout), README screenshots.
 7. ✅ The web dashboard: a rebuild of the screen as a smooth single-page site (panels that
    glide sideways, charts that morph, a chat drawer, company logos and brand colours),
-   about 10x faster than the Streamlit version, with every feature carried over. A public
-   link is next.
+   about 10x faster than the Streamlit version, with every feature carried over.
+8. ✅ Industry and world: the stock against its sector and the S&P 500, the industry's
+   drivers in the company's own words (10-K, cited), live economic indicators (FRED), and
+   "What's happening now", a cited summary of recent news from a web search (on request,
+   about 6-7¢, saved for the day). A public link is next.
 
 **Version 2: macro layer and segments**
 - Macro data from FRED (interest rates, oil, consumer credit, card delinquencies)
@@ -80,6 +83,7 @@ Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in:
 - `ANTHROPIC_API_KEY`: your key from the Anthropic Console
 - `FINNHUB_API_KEY`: a free key from finnhub.io (for headlines)
 - `TIINGO_API_KEY`: a free token from tiingo.com (for daily stock prices)
+- `FRED_API_KEY`: a free key from fredaccount.stlouisfed.org (for industry indicators)
 
 Then start the dashboard:
 
@@ -126,4 +130,7 @@ BUILD_LOG.md           what was built, what broke, and how it was fixed
 - [Finnhub](https://finnhub.io/): company news by ticker, for headlines, and company
   logos, websites and market values (free key)
 - [Tiingo](https://www.tiingo.com/): daily stock prices, for big-move detection (free key)
-- [Anthropic Claude API](https://docs.anthropic.com/): the Ask assistant (Claude Haiku 5.5, Citations)
+- [FRED](https://fred.stlouisfed.org/): the Federal Reserve's economic data, for industry
+  indicators such as oil prices, interest rates and retail sales (free key)
+- [Anthropic Claude API](https://docs.anthropic.com/): the assistant (Claude Haiku 5.5, with
+  Citations, and web search for the industry news summary)

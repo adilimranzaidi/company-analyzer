@@ -14,3 +14,4 @@ select = ["E", "W", "F", "I", "B", "UP"]
 # wrapping them for the linter would change the text Claude receives.
 "analyzer/assistant.py" = ["E501"]
 "analyzer/synopsis.py" = ["E501"]
+"webapp/ai.py" = ["E501"]

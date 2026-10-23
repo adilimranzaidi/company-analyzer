@@ -104,6 +104,26 @@ async def peers(request: Request) -> Response:
                        max_age=300)
 
 
+async def industry(request: Request) -> Response:
+    return await _json(payloads.industry_payload, _ticker(request), max_age=600)
+
+
+async def drivers_get(request: Request) -> Response:
+    return await _json(ai.drivers_status, _ticker(request))
+
+
+async def drivers_post(request: Request) -> Response:
+    return _stream(ai.write_drivers, _ticker(request))
+
+
+async def update_get(request: Request) -> Response:
+    return await _json(ai.update_status, _ticker(request))
+
+
+async def update_post(request: Request) -> Response:
+    return _stream(ai.write_update, _ticker(request))
+
+
 async def filings(request: Request) -> Response:
     return await _json(payloads.filings_payload, _ticker(request), max_age=300)
 
@@ -185,6 +205,11 @@ routes = [
     Route("/api/around/{ticker}", around),
     Route("/api/peers/{ticker}", peers),
     Route("/api/filings/{ticker}", filings),
+    Route("/api/industry/{ticker}", industry),
+    Route("/api/drivers/{ticker}", drivers_get, methods=["GET"]),
+    Route("/api/drivers/{ticker}", drivers_post, methods=["POST"]),
+    Route("/api/update/{ticker}", update_get, methods=["GET"]),
+    Route("/api/update/{ticker}", update_post, methods=["POST"]),
     Route("/api/logo/{ticker}", logo),
     Route("/api/glossary", glossary),
     Route("/api/warm/{ticker}", warm, methods=["POST"]),

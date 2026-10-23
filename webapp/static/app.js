@@ -5,7 +5,7 @@
 //   - a panel is drawn only the first time it's opened (then kept);
 //   - everything already fetched is kept, so going back to a company is instant;
 //   - switching company cancels requests still running for the old one.
-import { periodChart, timeChart, sparkline, ring, sankey, bubbles, tween, reduceMotion } from "/static/charts.js";
+import { periodChart, timeChart, compareChart, sparkline, ring, sankey, bubbles, tween, reduceMotion } from "/static/charts.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -81,7 +81,7 @@ function explainBox(host, ticker, kind, id, label = "Explain from the filings") 
 function showAnswer(host, a) {
   host.dataset.answer = ""; host.innerHTML = `<div class="prose">${markdown(a.text)}</div>${sourcesHtml(a.sources)}<div class="faint" style="margin-top:6px">${costText(a)}</div>`;
 }
-async function runAnswer(host, path, body) {
+async function runAnswer(host, path, body) {  // resolves when the answer is shown
   host.innerHTML = `<div class="status">Starting…</div><div class="prose typing" hidden></div>`;
   const status = host.querySelector(".status"), live = host.querySelector(".prose"); let text = "";
   try {
@@ -120,7 +120,8 @@ function setBrand(color) { document.documentElement.style.setProperty("--brand",
 
 // ---------- Panels ----------
 const PANELS = [
-  { id: "snapshot", title: "Snapshot" }, { id: "briefing", title: "Briefing" }, { id: "trends", title: "Trends" },
+  { id: "snapshot", title: "Snapshot" }, { id: "briefing", title: "Briefing" }, { id: "industry", title: "Industry and world" },
+  { id: "trends", title: "Trends" },
   { id: "flow", title: "Where the money goes" }, { id: "price", title: "Price and events" },
   { id: "rivals", title: "Rivals" }, { id: "filings", title: "Filings" },
 ];
@@ -158,10 +159,10 @@ $("simple").onclick = () => { const on = $("simple").getAttribute("aria-checked"
 if (store.get("simple", false)) { $("simple").setAttribute("aria-checked", true); document.body.classList.add("simple-on"); }
 
 // Data each panel needs (fetched in the background after the company loads).
-const NEEDS = { snapshot: ["company"], briefing: ["briefing"], trends: ["company"], flow: ["company"], price: ["price", "events"], rivals: ["peers"], filings: ["filings"] };
+const NEEDS = { snapshot: ["company"], briefing: ["briefing"], industry: ["industry"], trends: ["company"], flow: ["company"], price: ["price", "events"], rivals: ["peers"], filings: ["filings"] };
 const URLS = { company: t => `/api/company/${t}`, price: t => `/api/price/${t}`, events: t => `/api/events/${t}`,
   peers: t => `/api/peers/${t}` + ((store.get("peers:" + t, null) || []).length ? `?tickers=${store.get("peers:" + t).join(",")}` : ""),
-  filings: t => `/api/filings/${t}`, briefing: t => `/api/briefing/${t}` };
+  filings: t => `/api/filings/${t}`, briefing: t => `/api/briefing/${t}`, industry: t => `/api/industry/${t}` };
 function need(kind, ticker = S.ticker) {
   const c = cache.get(ticker); if (c[kind]) return c[kind];
   c[kind] = api(URLS[kind](ticker), S.ctrl.signal).catch(err => { delete c[kind]; throw err; });
@@ -201,7 +202,7 @@ async function load(ticker, panel) {
     need("price").then(p => { if (S.ticker === ticker) priceHeader(p); }).catch(() => {});
     // Fetch the rest while the reader looks at the first panel.
     const idle = window.requestIdleCallback || (f => setTimeout(f, 300));
-    idle(() => ["events", "briefing", "filings", "peers"].forEach(k => need(k).catch(() => {})));
+    idle(() => ["industry", "events", "briefing", "filings", "peers"].forEach(k => need(k).catch(() => {})));
     // Once the page has been quiet a while, start reading filings for the chat too.
     setTimeout(() => { if (S.ticker === ticker) idle(() => warmChat(ticker)); }, 12000);
   } catch (err) {
@@ -234,7 +235,7 @@ function priceHeader(p) {
   if (!p.series?.length) { $("px").textContent = ""; $("chg").textContent = p.error || ""; return; }
   const target = p.last;
   tween(900, k => { $("px").textContent = "$" + (target * k).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); });
-  const c = p.change_1y; $("chg").textContent = c == null ? "" : `${pct(c)} over the last year`; $("chg").className = "chg " + (c >= 0 ? "up" : "down");
+  const c = p.change_1y; $("chg").textContent = c == null ? "" : `${pct(c)} share price, past year`; $("chg").className = "chg " + (c >= 0 ? "up" : "down");
   const year = p.series.slice(-252).map(r => r[1]); sparkline($("spark"), year, c >= 0 ? "var(--up)" : "var(--down)", true);
 }
 
@@ -313,6 +314,83 @@ RENDER.briefing = (host, { briefing: b }, ticker) => {
         else if (m.type === "error") box.innerHTML = `<div class="error">${esc(m.message)}</div>`; });
     } catch (err) { box.innerHTML = `<div class="error">${esc(err.message)}</div>`; }
   };
+};
+
+// ---------- Panel: Industry and world ----------
+// A cited answer: shown if saved; otherwise a button that writes it live (or, with auto,
+// written straight away). For the daily update, an older day's answer stays readable.
+function answerCard(host, ticker, path, { label, note, auto }) {
+  api(`${path}/${ticker}`).then(st => {
+    if (st.available === false) { host.innerHTML = `<div class="empty">${esc(st.reason)}</div>`; return; }
+    const write = () => runAnswer(host, `${path}/${ticker}`, {});
+    if (st.answer && st.is_today !== false) return showAnswer(host, st.answer);
+    if (!st.can_write) {
+      if (st.answer) showAnswer(host, st.answer);
+      else host.innerHTML = `<div class="faint">Add an Anthropic API key to write this.</div>`;
+      return;
+    }
+    if (auto && !st.answer) return write();
+    host.innerHTML = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="icon-btn primary pressable">${esc(label)}</button><span class="faint">${esc(note)}</span></div>`;
+    host.querySelector("button").onclick = write;
+    if (st.answer) {
+      const box = document.createElement("div"); box.style.marginTop = "14px"; host.appendChild(box);
+      showAnswer(box, st.answer);
+      box.insertAdjacentHTML("afterbegin", `<div class="faint" style="margin-bottom:8px">Last update: ${dateText(st.date)}.</div>`);
+    }
+  }).catch(err => { host.innerHTML = `<div class="error">${esc(err.message)}</div>`; });
+}
+const indValue = (v, unit) => v == null ? "–" : unit === "pct" ? v.toFixed(2) + "%"
+  : unit === "usd" ? "$" + v.toLocaleString("en-US", { maximumFractionDigits: v >= 100 ? 0 : 2 })
+  : v.toLocaleString("en-US", { maximumFractionDigits: 1 });
+const indChange = c => !c || c.value == null ? "" : c.kind === "points"
+  ? `${c.value >= 0 ? "+" : "−"}${Math.abs(c.value).toFixed(2)} points in a year`
+  : `${c.value >= 0 ? "+" : "−"}${Math.abs(c.value).toFixed(1)}% in a year`;
+const indCard = i => i.error ? "" : `<div class="card" style="padding:14px 16px">
+    <div class="faint">${esc(i.name)}</div>
+    <div style="font:500 22px var(--display);margin-top:4px">${indValue(i.value, i.unit)}</div>
+    <div class="muted" style="font-size:13px">${indChange(i.change)}${i.change ? " · " : ""}${dateText(i.as_of)}</div>
+    <svg viewBox="0 0 100 34" preserveAspectRatio="none" style="width:100%;height:34px;margin:6px 0" data-points="${esc(JSON.stringify(i.points.map(p => p[1])))}" aria-hidden="true"></svg>
+    <div class="muted" style="font-size:13px">${esc(i.why)}</div>
+    <a class="faint" href="${esc(i.source_url)}" target="_blank" rel="noopener">Source: FRED</a></div>`;
+
+RENDER.industry = (host, { industry: d }, ticker) => {
+  const perf = d.performance, n = perf.names;
+  const colors = { [ticker]: "var(--brand)", [d.fund]: "#c3cde0", SPY: "#7a879e" };
+  const ret = (t, k) => perf.returns[t]?.[k];
+  const pctTxt = v => v == null ? "–" : (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%";
+  const own = d.indicators.filter(i => !i.macro), macro = d.indicators.filter(i => i.macro);
+  const label = t => t === ticker ? `${ticker} (this company)` : t === "SPY" ? "S&P 500 (SPY)" : d.fund_name;
+  host.innerHTML = `<h2>Industry and world</h2>
+    <p class="lede">${esc(d.industry === "General" ? d.sec_industry : d.industry)}: how the industry is doing, what drives it, and what's happening in the world that affects it.</p>
+    <div class="card"><div class="card-head"><h3>The stock against its industry</h3>
+        <div class="seg" id="perf-range"><button aria-pressed="true" data-k="1y">1 year</button><button aria-pressed="false" data-k="5y">5 years</button></div></div>
+      ${Object.keys(perf.lines).length ? `<div class="chart" id="perf-chart" style="height:280px"><div class="tip"></div></div>` : `<div class="empty" style="margin-top:10px">${esc(perf.note || "No price data.")}</div>`}
+      <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th></th><th class="n">1 year</th><th class="n">5 years</th></tr></thead><tbody>
+      ${Object.keys(n).map(t => `<tr><td><span style="color:${colors[t]}" aria-hidden="true">●</span> ${esc(label(t))}</td><td class="n">${pctTxt(ret(t, "1y"))}</td><td class="n">${pctTxt(ret(t, "5y"))}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="faint" style="margin-top:6px">Total return with dividends. Each line starts at 100. Calculated in Python from daily prices.</div></div>
+    <div class="grid split" style="align-items:start">
+      <div class="card"><h3>What drives the industry</h3><p class="faint" style="margin:4px 0 10px">In the company's own words, from its latest 10-K.</p><div id="drivers"></div></div>
+      <div class="grid" style="align-content:start">
+        <div class="card"><h3>Indicators to watch</h3><p class="faint" style="margin:4px 0 0">Live economic data for this industry, from the Federal Reserve's FRED service.</p>${d.fred_note ? `<div class="empty" style="margin-top:10px">${esc(d.fred_note)}</div>` : ""}</div>
+        ${own.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">${own.map(indCard).join("")}</div>` : ""}
+        ${macro.length ? `<div class="faint">The wider economy</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">${macro.map(indCard).join("")}</div>` : ""}
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>What's happening now</h3><span class="faint">Recent news from a web search, every point linked to its source</span></div>
+      <div id="world" style="margin-top:12px"></div></div>`;
+  host.querySelectorAll("svg[data-points]").forEach(s => sparkline(s, JSON.parse(s.dataset.points), "var(--brand)", true));
+  answerCard($("drivers"), ticker, "/api/drivers", { auto: true, label: "Find the drivers", note: "" });
+  answerCard($("world"), ticker, "/api/update", { label: "Write today's update",
+    note: "Searches recent news (oil, tariffs, competitors and so on) and writes a cited summary. About 6-7¢, then saved for the day." });
+  if (!Object.keys(perf.lines).length) return;
+  const ch = $("perf-chart"), chart = compareChart(ch, ch.querySelector(".tip"));
+  const show = k => chart.set(Object.keys(n).filter(t => perf.lines[t]?.[k]).map(t => ({
+    name: t === "SPY" ? "S&P 500" : t, color: colors[t], main: t === ticker,
+    points: perf.lines[t][k].map(([day, v]) => [new Date(day + "T00:00").getTime(), v]) })));
+  $("perf-range").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+    [...$("perf-range").children].forEach(x => x.setAttribute("aria-pressed", x === b)); show(b.dataset.k); };
+  show("1y");
 };
 
 // ---------- Panel: Trends ----------
